@@ -1,0 +1,32 @@
+!    -*- f90 -*-
+! Note: the context of this file is case sensitive.
+
+python module hltwimf ! in 
+    interface  ! in :hltwimf
+        subroutine hltwim(day,ut,glat,glon,kp,w,mw) ! in :hltwimf:hltwim.f90
+            use base
+            use base1
+            integer intent(in) :: day
+            real(kind=4) intent(in) :: ut
+            real(kind=4) intent(in) :: glat
+            real(kind=4) intent(in) :: glon
+            real(kind=4) intent(in) :: kp
+            real(kind=4) dimension(2),intent(out) :: w
+            real(kind=4) dimension(2),intent(out) :: mw
+        end subroutine hltwim
+        subroutine hltwim_batch(iday,ut,glat,glon,kp,xnan,uvmw,n) ! in :hltwimf:hltwim.f90
+            integer dimension(n),intent(in) :: iday
+            real(kind=4) dimension(n),intent(in),depend(n) :: ut
+            real(kind=4) dimension(n),intent(in),depend(n) :: glat
+            real(kind=4) dimension(n),intent(in),depend(n) :: glon
+            real(kind=4) dimension(n),intent(in),depend(n) :: kp
+            real(kind=4) intent(in) :: xnan
+            real(kind=4) dimension(n,6),intent(out),depend(n) :: uvmw
+            integer, optional,intent(hide),depend(iday) :: n=len(iday)
+        end subroutine hltwim_batch
+    end interface 
+end python module hltwimf
+
+! This file was auto-generated with f2py (version:2.3.5).
+! See:
+! https://web.archive.org/web/20140822061353/http://cens.ioc.ee/projects/f2py2e

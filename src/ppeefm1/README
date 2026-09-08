@@ -1,0 +1,12 @@
+This source code contains the routines and a test program for
+the Real-time Equatorial Electric Field Model (RTEEF).
+
+To compile the source code, you need to have installed the GNU
+Scientific Library. Then, simply type 'make' in the directory
+and it should compile the test program 'rteef'. rteef will then
+prompt the user to enter times and a location and will then
+output a data file of EEF values.
+
+For questions, contact:
+patrick.alken@noaa.gov
+manoj.c.nair@noaa.gov

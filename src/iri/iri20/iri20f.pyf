@@ -1,0 +1,104 @@
+!    -*- f90 -*-
+! Note: the context of this file is case sensitive.
+
+python module iri20f ! in 
+    interface  ! in :mpyricalspace
+        subroutine iri_sub(jf,jmag,alati,along,iyyyy,mmdd,dhour,heibeg,heiend,heistp,outf,oarr) ! in :mpyricalspace:irisub.for
+            logical dimension(50) :: jf
+            integer :: jmag
+            real :: alati
+            real :: along
+            integer :: iyyyy
+            integer :: mmdd
+            real :: dhour
+            real :: heibeg
+            real :: heiend
+            real :: heistp
+            real dimension(20,1000), intent(out) :: outf
+            real dimension(100), intent(inplace) :: oarr
+            real :: umr
+            real :: pi
+            real :: humr
+            real :: dumr
+            real :: argmax
+            real :: era
+            real :: aquad
+            real :: bquad
+            real :: dimo
+            real :: hmf2
+            real :: nmf2s
+            real :: hmf1
+            logical :: f1reg
+            real :: b0
+            real :: b1
+            real :: c1
+            real :: hz
+            real :: t
+            real :: hst
+            real :: hme
+            real :: nmes
+            real :: hef
+            logical :: enight
+            real dimension(4) :: e
+            real :: hmd
+            real :: nmd
+            real :: hdx
+            real :: d1
+            real :: xkk
+            real :: fp30
+            real :: fp3u
+            real :: fp1
+            real :: fp2
+            real :: beta
+            real :: eta
+            real :: delta
+            real :: zeta
+            real :: flon
+            real :: ryear
+            real :: b2top
+            integer :: itopn
+            real :: tcor
+            integer :: konsol
+            logical :: mess
+            real dimension(25) :: sw
+            integer :: isw
+            real dimension(25) :: swc
+            real :: y05
+            real :: h05top
+            real :: qf
+            real :: xnetop
+            real :: xm3000
+            real :: hhalf
+            real :: tau
+        end subroutine iri_sub
+        subroutine read_ig_rz ! in :mpyricalspace:irifun.for
+            real dimension(806) :: aig
+            real dimension(806) :: arz
+            integer :: iymst
+            integer :: iymend
+        end subroutine read_ig_rz
+        subroutine readapf107 ! in :mpyricalspace:irifun.for
+            integer dimension(27000,9) :: aap
+            real dimension(27000,3) :: af107
+            integer :: n
+        end subroutine readapf107
+        subroutine iri_batch(jf,oarr_in,iyyyy,mmdd,dhour,alati,along,hei,f107,f107a,outv,oarrv,n) ! in :mpyricalspace:iri_batch.f90
+            logical dimension(50),intent(in) :: jf
+            real dimension(100),intent(in) :: oarr_in
+            integer dimension(n),intent(in) :: iyyyy
+            integer dimension(n),intent(in),depend(iyyyy) :: mmdd
+            real dimension(n),intent(in),depend(iyyyy) :: dhour
+            real dimension(n),intent(in),depend(iyyyy) :: alati
+            real dimension(n),intent(in),depend(iyyyy) :: along
+            real dimension(n),intent(in),depend(iyyyy) :: hei
+            real dimension(n),intent(in),depend(iyyyy) :: f107
+            real dimension(n),intent(in),depend(iyyyy) :: f107a
+            real dimension(n,20),intent(out),depend(iyyyy) :: outv
+            real dimension(n,100),intent(out),depend(iyyyy) :: oarrv
+            integer, optional,intent(in),check(len(iyyyy)>=n),depend(iyyyy) :: n=len(iyyyy)
+        end subroutine iri_batch
+    end interface
+end python module iri20f
+
+! This file was auto-generated with f2py (version:1.21.0).
+! See http://cens.ioc.ee/projects/f2py2e/

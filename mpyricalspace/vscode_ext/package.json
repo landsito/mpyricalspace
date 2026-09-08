@@ -1,0 +1,36 @@
+{
+  "name": "mpyricalspace-build-status",
+  "displayName": "mpyricalspace build status",
+  "description": "Colours src/<model>/ folders in the Explorer by whether their compiled Fortran extension loads (python -m mpyricalspace doctor).",
+  "version": "0.1.2",
+  "publisher": "mpyricalspace",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/landsito/mpyricalspace" },
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Other"],
+  "activationEvents": ["workspaceContains:src/meson.build"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "mpyricalspace.refreshBuildStatus",
+        "title": "mpyricalspace: Refresh build status"
+      }
+    ],
+    "configuration": {
+      "title": "mpyricalspace build status",
+      "properties": {
+        "mpyricalspace.pythonPath": {
+          "type": "string",
+          "default": "",
+          "description": "Interpreter used for 'python -m mpyricalspace doctor'. Empty = the Python extension's selected interpreter, falling back to 'python3'."
+        },
+        "mpyricalspace.decorateBadges": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a check / cross badge on the folder (the colour is applied regardless)."
+        }
+      }
+    }
+  }
+}

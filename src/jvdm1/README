@@ -1,0 +1,42 @@
+This package contains a climatological model of the JULIA vertical
+plasma drifts. It is a model of three parameters: local time,
+season, and EUVAC. Included in the package are the coefficents
+for the mean model and standard deviation model, along with
+source code required to plot one dimensional slices of the model
+for any desired parameter.
+
+To compile source code under Unix:
+==================================
+
+The GNU Scientific Library (v1.9) is required for compiling this source
+code. See http://www.gnu.org/software/gsl/
+
+Once GSL is installed, simply typing 'make' will compile
+all files and create the executable "drift_plot". This program
+can be used to generate 1D plots of the drift model for any
+choice of parameters with any of the four parameters as the plotting
+variable.
+
+Execute drift_plot -h to find out all the command line options for
+how to specify parameter values.
+
+Notes regarding using the source routines in your own work
+==========================================================
+
+The important source code files you'd need to include in your
+own work are:
+
+drift_calc.c   - contains routines for computing the vertical drift mean and
+                 standard deviation
+
+drift_basis.c  - contains the basis functions for each parameter
+                 in the model
+
+drift_plot.c   - this is an independent driver program which will
+                 demonstrate how to call the routines in drift_calc.c
+
+other          - the other source files contain various computational
+                 routines needed by the model
+
+Patrick Alken
+patrick.alken@noaa.gov

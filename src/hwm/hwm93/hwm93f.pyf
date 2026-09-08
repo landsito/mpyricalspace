@@ -1,0 +1,30 @@
+!    -*- f90 -*-
+python module hwm93f
+    interface
+        subroutine gws5(iyd,sec,alt,glat,glong,stl,f107a,f107,ap,w) ! in :hwm93f:hwm93.f
+            integer intent(in) :: iyd
+            real intent(in) :: sec
+            real intent(in) :: alt
+            real intent(in) :: glat
+            real intent(in) :: glong
+            real intent(in) :: stl
+            real intent(in) :: f107a
+            real intent(in) :: f107
+            real dimension(2),intent(in) :: ap
+            real dimension(2),intent(out) :: w
+        end subroutine gws5
+        subroutine gws5_batch(iyd,sec,alt,glat,glong,f107a,f107,ap,xnan,uvdd,n) ! in :hwm93f:hwm93_batch.f90
+            integer dimension(n),intent(in) :: iyd
+            real dimension(n),intent(in),depend(iyd) :: sec
+            real dimension(n),intent(in),depend(iyd) :: alt
+            real dimension(n),intent(in),depend(iyd) :: glat
+            real dimension(n),intent(in),depend(iyd) :: glong
+            real dimension(n),intent(in),depend(iyd) :: f107a
+            real dimension(n),intent(in),depend(iyd) :: f107
+            real dimension(n),intent(in),depend(iyd) :: ap
+            real intent(in) :: xnan
+            real dimension(n,4),intent(out),depend(iyd) :: uvdd
+            integer, optional,intent(in),check(len(iyd)>=n),depend(iyd) :: n=len(iyd)
+        end subroutine gws5_batch
+    end interface
+end python module hwm93f

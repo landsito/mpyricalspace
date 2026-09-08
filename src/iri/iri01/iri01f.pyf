@@ -1,0 +1,74 @@
+!    -*- f90 -*-
+! Note: the context of this file is case sensitive.
+
+python module iri01f ! in 
+    interface  ! in :iri01f
+        subroutine iri_sub(jf,jmag,alati,along,iyyyy,mmdd,dhour,heibeg,heiend,heistp,outf,oarr) ! in :iri01f:irisub.for
+            logical dimension(30) :: jf
+            integer :: jmag
+            real :: alati
+            real :: along
+            integer :: iyyyy
+            integer :: mmdd
+            real :: dhour
+            real :: heibeg
+            real :: heiend
+            real :: heistp
+            real dimension(20,100) :: outf
+            real dimension(50) :: oarr
+            real :: umr
+            real :: dumr
+            real :: nmf2
+            real :: hmf1
+            real :: f1reg
+            real :: b1
+            real :: c1
+            real :: t
+            real :: hst
+            real :: nme
+            real :: hef
+            real :: e
+            real :: nmd
+            real :: hdx
+            real :: xkk
+            real :: fp30
+            real :: fp3u
+            real :: fp1
+            real :: fp2
+            real :: tnhs
+            real dimension(4) :: xsm
+            real dimension(5) :: mm
+            real dimension(4) :: dti
+            integer :: mxsm
+            real :: texos
+            real :: tlbdh
+            real :: sigma
+            real :: ate1
+            real dimension(6) :: stte
+            real :: dte
+            real :: eta
+            real :: delta
+            real :: zeta
+            integer :: monito
+        end subroutine iri_sub
+        subroutine iri_batch(jf,oarr_in,iyyyy,mmdd,dhour,alati,along,hei,f107,f107a,outv,oarrv,n) ! in :iri01f:iri_batch.f90
+            logical dimension(50),intent(in) :: jf
+            real dimension(100),intent(in) :: oarr_in
+            integer dimension(n),intent(in) :: iyyyy
+            integer dimension(n),intent(in),depend(n) :: mmdd
+            real dimension(n),intent(in),depend(n) :: dhour
+            real dimension(n),intent(in),depend(n) :: alati
+            real dimension(n),intent(in),depend(n) :: along
+            real dimension(n),intent(in),depend(n) :: hei
+            real dimension(n),intent(in),depend(n) :: f107
+            real dimension(n),intent(in),depend(n) :: f107a
+            real dimension(n,20),intent(out),depend(n) :: outv
+            real dimension(n,100),intent(out),depend(n) :: oarrv
+            integer, optional,intent(hide),depend(iyyyy) :: n=len(iyyyy)
+        end subroutine iri_batch
+    end interface 
+end python module iri01f
+
+! This file was auto-generated with f2py (version:2.5.2).
+! See:
+! https://web.archive.org/web/20140822061353/http://cens.ioc.ee/projects/f2py2e

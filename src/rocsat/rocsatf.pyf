@@ -1,0 +1,28 @@
+!    -*- f90 -*-
+! Note: the context of this file is case sensitive.
+
+python module rocsatf ! in 
+    interface  ! in :mpyricalspace
+        subroutine getverticaldrift(gl,iyd,f107,slt,vd) ! in :mpyricalspace:vfjmodroc1.F90
+            use vfjmodroc, only: vfjmodelrocstart, vfjmodelrocinit, vfjmodelroc
+            real*4 intent(in) :: gl
+            integer intent(in) :: iyd
+            real*4 intent(in) :: f107
+            real*4 intent(in) :: slt
+            real*4 intent(out) :: vd
+        end subroutine getverticaldrift
+        subroutine getverticaldrift_batch(gl,iyd,f107,slt,vd,n) ! in :mpyricalspace:vfjmodroc1.F90
+            use vfjmodroc, only: vfjmodelrocstart, vfjmodelrocinit, vfjmodelroc
+            real*4 dimension(n),intent(in) :: gl
+            integer dimension(n),intent(in),depend(gl) :: iyd
+            real*4 dimension(n),intent(in),depend(gl) :: f107
+            real*4 dimension(n),intent(in),depend(gl) :: slt
+            real*4 dimension(n),intent(out),depend(gl) :: vd
+            integer, optional,intent(in),check(len(gl)>=n),depend(gl) :: n=len(gl)
+        end subroutine getverticaldrift_batch
+    end interface 
+end python module rocsatf
+
+! This file was auto-generated with f2py (version:1.23.0).
+! See:
+! https://web.archive.org/web/20140822061353/http://cens.ioc.ee/projects/f2py2e

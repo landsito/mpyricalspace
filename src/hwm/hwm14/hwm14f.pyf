@@ -1,0 +1,46 @@
+!    -*- f90 -*-
+! Note: the context of this file is case sensitive.
+
+python module hwm14f ! in 
+    interface  ! in :mpyricalspace
+        subroutine hwm14(iyd,sec,alt,glat,glon,stl,f107a,f107,ap,w) ! in :mpyricalspace:hwm14.f90
+            use hwm
+            integer(kind=4) intent(in) :: iyd
+            real(kind=4) intent(in) :: sec
+            real(kind=4) intent(in) :: alt
+            real(kind=4) intent(in) :: glat
+            real(kind=4) intent(in) :: glon
+            real(kind=4) intent(in) :: stl
+            real(kind=4) intent(in) :: f107a
+            real(kind=4) intent(in) :: f107
+            real(kind=4) dimension(2),intent(in) :: ap
+            real(kind=4) dimension(2),intent(out) :: w
+        end subroutine hwm14
+        subroutine dwm07(iyd,sec,alt,glat,glon,ap,dw) ! in :mpyricalspace:hwm14.f90
+            use hwm
+            use dwm
+            integer intent(in) :: iyd
+            real(kind=4) intent(in) :: sec
+            real(kind=4) intent(in) :: alt
+            real(kind=4) intent(in) :: glat
+            real(kind=4) intent(in) :: glon
+            real(kind=4) dimension(2),intent(in) :: ap
+            real(kind=4) dimension(2),intent(out) :: dw
+        end subroutine dwm07
+        subroutine hwm14_batch(iyd,sec,alt,glat,glon,ap,xnan,uvdd,n) ! in :mpyricalspace:hwm14_batch.f90
+            integer dimension(n),intent(in) :: iyd
+            real(kind=4) dimension(n),intent(in),depend(iyd) :: sec
+            real(kind=4) dimension(n),intent(in),depend(iyd) :: alt
+            real(kind=4) dimension(n),intent(in),depend(iyd) :: glat
+            real(kind=4) dimension(n),intent(in),depend(iyd) :: glon
+            real(kind=4) dimension(n),intent(in),depend(iyd) :: ap
+            real(kind=4) intent(in) :: xnan
+            real(kind=4) dimension(n,4),intent(out),depend(iyd) :: uvdd
+            integer, optional,intent(in),check(len(iyd)>=n),depend(iyd) :: n=len(iyd)
+        end subroutine hwm14_batch
+    end interface
+end python module hwm14
+
+! This file was auto-generated with f2py (version:1.23.0).
+! See:
+! https://web.archive.org/web/20140822061353/http://cens.ioc.ee/projects/f2py2e
