@@ -12,3 +12,14 @@
 # fallback (see native.txt's own git history) -- not worth the risk for a
 # file this small; keep it a plain git blob instead.
 native.txt !filter !diff !merge !text
+
+# ==============================================================================
+# GitHub Linguist Configuration
+# ==============================================================================
+# The core of this library is written in Python. Fortran source files are 
+# included only for compilation purposes and backend execution. To prevent 
+# Fortran from distorting the repository's language statistics due to file size, 
+# we mark these files as vendored/dependencies.
+
+*.f90 linguist-vendored
+*.f linguist-vendored
