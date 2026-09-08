@@ -1,0 +1,7 @@
+# meson "native file" -- workaround for macOS + conda toolchain mixing.
+# Only needed if `pip install` fails linking the static Fortran libs because
+# meson picked up conda's binutils/cctools ar/ranlib instead of Apple's.
+# Pass it with:  pip install -e . --config-settings=setup-args=--native-file=$PWD/native.txt
+[binaries]
+ar     = '/usr/bin/ar'
+ranlib = '/usr/bin/ranlib'

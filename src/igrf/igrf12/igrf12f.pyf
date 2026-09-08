@@ -1,0 +1,23 @@
+!    -*- f90 -*-
+! Note: the context of this file is case sensitive.
+
+python module igrf12f ! in 
+    interface  ! in :igrf12f
+        subroutine igrf12syn(isv,date,itype,alt,colat,elong,x,y,z,f) ! in :igrf12f:igrf12.f
+            integer intent(in) :: isv
+            double precision intent(in) :: date
+            integer intent(in) :: itype
+            double precision intent(in) :: alt
+            double precision intent(in) :: colat
+            double precision intent(in) :: elong
+            double precision intent(out) :: x
+            double precision intent(out) :: y
+            double precision intent(out) :: z
+            double precision intent(out) :: f
+        end subroutine igrf12syn
+    end interface 
+end python module igrf12f
+
+! This file was auto-generated with f2py (version:2.5.2).
+! See:
+! https://web.archive.org/web/20140822061353/http://cens.ioc.ee/projects/f2py2e

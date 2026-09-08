@@ -1,0 +1,7 @@
+#define FILE_CHAMP_E_MEAN_OUT       "champ_E_mean_coeffs"
+#define FILE_CHAMP_E_STDDEV_OUT     "champ_E_stddev_coeffs"
+#define FILE_MODEL_PHI_OUT          "plot_phi_data.txt"
+#define FILE_MODEL_T_OUT            "plot_t_data.txt"
+#define FILE_MODEL_S_OUT            "plot_s_data.txt"
+#define FILE_MODEL_EUVAC_OUT        "plot_euvac_data.txt"
+#define FILE_MODEL_LUNAR_OUT        "plot_lunar_data.txt"

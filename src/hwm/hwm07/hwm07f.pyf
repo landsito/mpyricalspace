@@ -1,0 +1,39 @@
+!    -*- f90 -*-
+python module hwm07f
+    interface
+        subroutine hwm07(iyd,sec,alt,glat,glon,stl,f107a,f107,ap,w) ! in :hwm07f:hwm07e.f90
+            integer intent(in) :: iyd
+            real intent(in) :: sec
+            real intent(in) :: alt
+            real intent(in) :: glat
+            real intent(in) :: glon
+            real intent(in) :: stl
+            real intent(in) :: f107a
+            real intent(in) :: f107
+            real dimension(2),intent(in) :: ap
+            real dimension(2),intent(out) :: w
+        end subroutine hwm07
+        subroutine dwm07b_hwm_interface(iyd,sec,alt,glat,glon,ap,dw) ! in :hwm07f:dwm07b.f90
+            integer intent(in) :: iyd
+            real intent(in) :: sec
+            real intent(in) :: alt
+            real intent(in) :: glat
+            real intent(in) :: glon
+            real dimension(2),intent(in) :: ap
+            real dimension(2),intent(out) :: dw
+        end subroutine dwm07b_hwm_interface
+        subroutine hwm07_batch(iyd,sec,alt,glat,glon,f107a,f107,ap,xnan,uvdd,n) ! in :hwm07f:hwm07_batch.f90
+            integer dimension(n),intent(in) :: iyd
+            real dimension(n),intent(in),depend(iyd) :: sec
+            real dimension(n),intent(in),depend(iyd) :: alt
+            real dimension(n),intent(in),depend(iyd) :: glat
+            real dimension(n),intent(in),depend(iyd) :: glon
+            real dimension(n),intent(in),depend(iyd) :: f107a
+            real dimension(n),intent(in),depend(iyd) :: f107
+            real dimension(n),intent(in),depend(iyd) :: ap
+            real intent(in) :: xnan
+            real dimension(n,4),intent(out),depend(iyd) :: uvdd
+            integer, optional,intent(in),check(len(iyd)>=n),depend(iyd) :: n=len(iyd)
+        end subroutine hwm07_batch
+    end interface
+end python module hwm07f

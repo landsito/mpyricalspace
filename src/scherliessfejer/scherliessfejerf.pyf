@@ -1,0 +1,26 @@
+!    -*- f90 -*-
+! Note: the context of this file is case sensitive.
+
+python module scherliessfejerf ! in 
+    interface  ! in :scherliessfejerf
+        subroutine vdrift_storm_model(flag,ip,ae,slt,promptvd,dynamovd,vd) ! in :scherliessfejerf:StormDrift.F90
+            integer intent(in) :: flag
+            integer intent(in) :: ip
+            real*8 dimension(35136),intent(in) :: ae
+            real*8 intent(in) :: slt
+            real*8 intent(out) :: promptvd
+            real*8 intent(out) :: dynamovd
+            real*8 intent(out) :: vd
+        end subroutine vdrift_storm_model
+        subroutine vdrift_quiet_model(xt,xl,param,y) ! in :scherliessfejerf:StormDrift.F90
+            real*8 intent(in) :: xt
+            real*8 intent(in) :: xl
+            real*8 dimension(2),intent(in) :: param
+            real*8 intent(out) :: y
+        end subroutine vdrift_quiet_model
+    end interface 
+end python module scherliessfejerf
+
+! This file was auto-generated with f2py (version:2.3.5).
+! See:
+! https://web.archive.org/web/20140822061353/http://cens.ioc.ee/projects/f2py2e
