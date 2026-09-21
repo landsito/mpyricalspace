@@ -21,6 +21,9 @@ Download sources:
   ae/ao/al/au       Kyoto WDC aeasy-cgi -> realtime-image scrape -> NOAA OMNI  (ae_source)
   dst               Kyoto WDC
   symh/asy          Kyoto WDC aeasy-cgi
+  bt bx by bz vsw nsw tsw psw esw   NOAA OMNIWeb 1-min IMF + solar wind (GSM); `<name>_5min` = the 5-min series.
+                    Mongo: database `solar_wind`, collections resolution_1min / resolution_5min, stored under the long
+                    OMNI field names (e.g. 'BY,_nT_(GSM)_(NOAA-OMNI)'); the short names are translated on read/write.
 '''
 import os, glob, json, time, warnings, numpy as np
 from datetime import datetime, timedelta
@@ -55,6 +58,31 @@ _months = lambda t0, t1: [(datetime(y, m, 1), datetime(y + (m == 12), m % 12 + 1
                           and datetime(y + (m == 12), m % 12 + 1, 1) > _FLR['daily'](t0)]
 
 
+# ---- solar wind (NOAA OMNIWeb 1-min / 5-min) --------------------------------
+# short name -> (OMNIWeb var id, mongo field name without the source tag, fill code).  The mongo field names are
+# OMNIWeb's own column labels joined with "_" and tagged with the source, e.g. 'BY,_nT_(GSM)_(NOAA-OMNI)'.
+_SW = {'bt' : (13, 'Field_magnitude_average,_nT', '9999.99'),
+       'bx' : (14, 'BX,_nT_(GSE,_GSM)',           '9999.99'),
+       'by' : (17, 'BY,_nT_(GSM)',                '9999.99'),
+       'bz' : (18, 'BZ,_nT_(GSM)',                '9999.99'),
+       'vsw': (21, 'Speed,_km/s',                 '99999.9'),
+       'nsw': (25, 'Proton_Density,_n/cc',        '999.99'),
+       'tsw': (26, 'Proton_Temperature,_K',       '9999999.'),
+       'psw': (27, 'Flow_pressure,_nPa',          '99.99'),
+       'esw': (28, 'Electric_field,_mV/m',        '999.99')}
+_SWCAD   = ('sw1', 'sw5')                                                  # cadence == mongo collection == duckdb view
+_SWRES   = {'sw1': 'min', 'sw5': '5min'}                                   # cadence -> OMNIWeb resolution
+_SWSTART = {'sw1': datetime(1995, 1, 1), 'sw5': datetime(1981, 1, 1)}      # first record OMNIWeb serves with data
+_KEY     = {}                                                              # param -> mongo field
+for _k, (_, _long, _) in _SW.items():
+    _KEY[_k] = _KEY[_k + '_5min'] = _long + '_(NOAA-OMNI)'
+    _CAD[_k], _CAD[_k + '_5min'] = 'sw1', 'sw5'
+    _GRP[_k], _GRP[_k + '_5min'] = 'sw1', 'sw5'
+_FLR['sw1'] = _FLR['min']
+_FLR['sw5'] = lambda d: d.replace(minute=d.minute // 5 * 5, second=0, microsecond=0)
+_DENSE = 2000          # more timestamps than this -> one range scan instead of an `IN (...)` list
+
+
 class DataManager(object):
 
     def __init__(self, uri=None, path=None, local=False, auto_fetch=True, writes=None):
@@ -62,6 +90,7 @@ class DataManager(object):
         local = local or _env("MPYRICALSPACE_LOCAL") not in (None, "0")
         uri   = None if local else (uri or _env("MPYRICALSPACE_MONGO_URI") or cfg.get("mongo_uri"))
         self.auto_fetch, self.db = auto_fetch, None
+        self.sw = {}                                  # solar-wind collections (mongo): cadence 'sw1'/'sw5' -> collection
         self._cov, self._covp = {}, None
         # fetch/update may write to mongo only when explicitly allowed (protects a read-only production db)
         self.writes = writes if writes is not None else (_env("MPYRICALSPACE_MONGO_WRITE") not in (None, "0") or bool(cfg.get("mongo_writes")))
@@ -69,7 +98,9 @@ class DataManager(object):
             import pymongo
             u = _env("MPYRICALSPACE_MONGO_USER") or cfg.get("mongo_user")
             p = _env("MPYRICALSPACE_MONGO_PASSWORD") or cfg.get("mongo_password")
-            self.db = pymongo.MongoClient(uri, **({'username': u, 'password': p} if u else {})).geomagnetic_indices.resolution_1min
+            cl      = pymongo.MongoClient(uri, **({'username': u, 'password': p} if u else {}))
+            self.db = cl.geomagnetic_indices.resolution_1min
+            self.sw = {'sw1': cl.solar_wind.resolution_1min, 'sw5': cl.solar_wind.resolution_5min}
         if self.db is None:
             import duckdb
             self.path  = os.path.expanduser(path or _env("MPYRICALSPACE_DATA_DIR") or cfg.get("data_dir") or DEFAULT_DIR)
@@ -91,15 +122,35 @@ class DataManager(object):
     # --------------------------------------------------------------------- query
     def _query(self, cad, params, keys):
         'floored datetime -> mapping {param: value}'
+        dense = len(keys) > _DENSE                      # long series: one range scan, filtered here, beats a huge IN list
         if self.db is not None:
-            return {d['datetime']: d for d in self.db.find({'datetime': {'$in': list(keys)}}, {p: 1 for p in ['datetime', *params]})}
+            col = self.sw.get(cad) if cad in _SWCAD else self.db
+            if col is None or not keys:
+                return {}
+            field = {p: (_KEY[p] if cad in _SWCAD else p) for p in params}       # param -> stored field name
+            q     = {'datetime': {'$gte': min(keys), '$lte': max(keys)} if dense else {'$in': list(keys)}}
+            want, out = set(keys), {}
+            for d in col.find(q, {f: 1 for f in ['datetime', *field.values()]}):
+                if d['datetime'] in want:
+                    out[d['datetime']] = {'datetime': d['datetime'], **{p: d[f] for p, f in field.items() if f in d}}
+            return out
         if cad not in getattr(self, '_have', ()) or not keys:
             return {}
         cols = [p for p in params if p in self._cols.get(cad, ())]
         if not cols:
             return {}
-        q = "SELECT %s FROM %s WHERE datetime IN (%s)" % (",".join(['datetime', *cols]), cad, ",".join(['?'] * len(keys)))
-        return {r[0]: dict(zip(['datetime', *cols], r)) for r in self.con.execute(q, list(keys)).fetchall()}
+        sel = ",".join('"%s"' % c for c in ['datetime', *cols])      # quoted: 'by' is a reserved word in SQL
+        if dense:
+            want = set(keys)
+            rows = self.con.execute("SELECT %s FROM %s WHERE datetime BETWEEN ? AND ?" % (sel, cad), [min(keys), max(keys)]).fetchall()
+            return {r[0]: self._row(cols, r) for r in rows if r[0] in want}
+        q = "SELECT %s FROM %s WHERE datetime IN (%s)" % (sel, cad, ",".join(['?'] * len(keys)))
+        return {r[0]: self._row(cols, r) for r in self.con.execute(q, list(keys)).fetchall()}
+
+    @staticmethod
+    def _row(cols, r):
+        'duckdb row -> {param: value}; NULL becomes NaN so both backends hand back the same thing'
+        return dict(zip(['datetime', *cols], [r[0], *[np.nan if v is None else v for v in r[1:]]]))
 
     def _lookup(self, params, dts):
         self._ensure(params, dts)
@@ -167,6 +218,22 @@ class DataManager(object):
                         self._fetch_ae(m0, m1); self._mark('ae', m0, m1)
                     except Exception as e:
                         warnings.warn("AE auto-fetch for %s failed (%s)" % (m0.strftime('%Y-%m'), e))
+        now = datetime.utcnow()
+        for g in _SWCAD:
+            if g not in groups:
+                continue
+            for m0, m1 in _months(t0, t1):
+                if m1 <= _SWSTART[g]:
+                    continue                                   # before OMNIWeb's first record: nothing to fetch
+                # OMNI lags real time by weeks, so a month can stay partly covered: retry those at most every 6 h
+                if self._covered(g, m0.isoformat(), min(m1, now).isoformat()) or \
+                   (fresh and self._covered(g, m0.isoformat(), m0.isoformat())):
+                    continue
+                touched = True
+                try:
+                    self._mark(g, m0, self._fetch_sw(m0, m1, _SWRES[g]))
+                except Exception as e:
+                    warnings.warn("solar-wind auto-fetch for %s (%s) failed (%s)" % (m0.strftime('%Y-%m'), _SWRES[g], e))
         if touched:
             self._views()
 
@@ -183,6 +250,11 @@ class DataManager(object):
             print("backend: mongo (%s docs, %s .. %s)%s" % (
                 n, ext[0] and ext[0]['datetime'], ext[1] and ext[1]['datetime'],
                 "" if self.writes else "   [read-only]"))
+            for c, col in self.sw.items():
+                lo, hi = col.find_one(sort=[('datetime', 1)]), col.find_one(sort=[('datetime', -1)])
+                print("  solar_wind.%-15s %s docs, %s .. %s" % (
+                    'resolution_' + ('1min' if c == 'sw1' else '5min'), col.estimated_document_count(),
+                    lo and lo['datetime'], hi and hi['datetime']))
             return
         print("store: %s" % self.path)
         for c in sorted(set(_CAD.values())):
@@ -197,36 +269,45 @@ class DataManager(object):
     def fetch(self, d0, dn, kpap_source='potsdam', ae_source='auto', include=None):
         '''download every group (or `include` subset) over [d0, dn] and store it
            (parquet on the duckdb backend, forward-filled 1-min docs on mongo).
-           include: any of  kpap ae dst asy'''
+           include: any of  kpap ae dst asy sw1 sw5   (sw1 / sw5 = OMNIWeb 1-min / 5-min solar wind)'''
         self._writable()
         d0, dn = _dts(d0)[0], _dts(dn)[0]
-        groups = include or ['kpap', 'ae', 'dst', 'asy']
+        groups = include or ['kpap', 'ae', 'dst', 'asy', *_SWCAD]
         if 'kpap' in groups:
             self._fetch_kpap(d0, dn, kpap_source); self._mark('kpap', d0, dn)
         for m0, m1 in _months(d0, dn):
             if 'ae'  in groups: self._try(self._fetch_ae,  'ae',  m0, m1, ae_source)
             if 'dst' in groups: self._try(self._fetch_dst, 'dst', m0, m1)
             if 'asy' in groups: self._try(self._fetch_asy, 'asy', m0, m1)
-        self._views()
+            for g in _SWCAD:
+                if g in groups and m1 > _SWSTART[g]:
+                    self._try(self._fetch_sw, g, m0, m1, _SWRES[g])
+        if self.db is None:
+            self._views()
 
     def update(self, since=None):
         'fill every group from the end of its coverage (or `since`) up to today'
         self._writable()
-        dn = datetime.utcnow()
+        dn, since_arg = datetime.utcnow(), since
         if since is None and self.db is not None:
             last = self.db.find_one(sort=[('datetime', -1)])
             since = (last['datetime'] - timedelta(days=60)) if last else GFZ_START
-        for g in ('kpap', 'ae', 'dst', 'asy'):
-            iv = self._cov.get(g, [])
-            d0 = since or (datetime.fromisoformat(iv[-1][1]) - timedelta(days=60) if iv else GFZ_START)
+        for g in ('kpap', 'ae', 'dst', 'asy', *_SWCAD):
+            iv, start, since_g = self._cov.get(g, []), _SWSTART.get(g, GFZ_START), since
+            if since_arg is None and g in _SWCAD and self.sw.get(g) is not None:      # own collection, own last record
+                last    = self.sw[g].find_one(sort=[('datetime', -1)])
+                since_g = (last['datetime'] - timedelta(days=60)) if last else start
+            d0 = max(since_g or (datetime.fromisoformat(iv[-1][1]) - timedelta(days=60) if iv else start), start)
             try:    self.fetch(d0, dn, include=[g])
             except Exception as e: warnings.warn("update[%s] failed: %s" % (g, e))
 
     def _try(self, fn, g, m0, m1, *a):
-        try:    fn(m0, m1, *a); self._mark(g, m0, m1)
+        try:
+            until = fn(m0, m1, *a)
+            self._mark(g, m0, until if isinstance(until, datetime) else m1)
         except Exception as e: warnings.warn("%s %s failed: %s" % (g, m0.strftime('%Y-%m'), e))
 
-    _SPAN = {'daily': 1440, 'h3': 180, 'hourly': 60, 'q15': 15, 'min': 1}   # minutes a native-cadence row covers
+    _SPAN = {'daily': 1440, 'h3': 180, 'hourly': 60, 'q15': 15, 'min': 1, 'sw1': 1, 'sw5': 1}   # minutes a native-cadence row covers
 
     def _write(self, cad, df):
         'persist a native-cadence DataFrame (datetime + param columns) to the active backend'
@@ -248,20 +329,25 @@ class DataManager(object):
             self.con.unregister('_w')
 
     def _write_mongo(self, cad, df):
-        'forward-fill each native-cadence row to 1-min docs and $set-upsert'
+        """forward-fill each native-cadence row to 1-min docs and $set-upsert.
+           Solar wind (sw1/sw5) goes to its own solar_wind collection, un-filled, under the long OMNI field names."""
         from pandas import isna
         from pymongo import UpdateOne
+        col  = self.sw.get(cad) if cad in _SWCAD else self.db
+        if col is None:
+            raise RuntimeError("this backend has no %r collection" % cad)
+        name = (lambda k: _KEY.get(k, k)) if cad in _SWCAD else (lambda k: k)
         span, ops = self._SPAN[cad], []
         for _, r in df.iterrows():
             t0  = r['datetime'].to_pydatetime().replace(second=0, microsecond=0)
-            doc = {k: (float(v) if hasattr(v, 'dtype') else v) for k, v in r.items() if k != 'datetime' and not isna(v)}
+            doc = {name(k): (float(v) if hasattr(v, 'dtype') else v) for k, v in r.items() if k != 'datetime' and not isna(v)}
             if not doc:
                 continue
             ops += [UpdateOne({'datetime': t0 + timedelta(minutes=i)}, {'$set': doc}, upsert=True) for i in range(span)]
             if len(ops) >= 5000:
-                self.db.bulk_write(ops, ordered=False); ops = []
+                col.bulk_write(ops, ordered=False); ops = []
         if ops:
-            self.db.bulk_write(ops, ordered=False)
+            col.bulk_write(ops, ordered=False)
 
     @staticmethod
     def _running(s, window):
@@ -391,6 +477,18 @@ class DataManager(object):
         if df is not None and not df.empty:
             self._write('min', df.reset_index())
 
+    def _fetch_sw(self, d0, dn, res):
+        '''OMNIWeb solar wind + IMF over [d0, dn) at res = 'min' | '5min' -> stored under sw1 / sw5.
+           Returns the instant up to which OMNIWeb actually had data (<= dn; it lags real time by weeks),
+           so the caller can record honest coverage.'''
+        cad = 'sw1' if res == 'min' else 'sw5'
+        text, upto = _omni_text(d0, dn, res)
+        if text is not None:
+            df = _parse_omni(text, res)
+            if not df.empty:
+                self._write(cad, df)
+        return dn if upto is None else max(d0, min(dn, upto))
+
     # ---- shared parsing -------------------------------------------------------
     def _wdc(self, text, comp_at, want, suffix_at=None):
         'Kyoto WDC hourly-record format -> DataFrame indexed by minute'
@@ -446,6 +544,38 @@ class DataManager(object):
 
 
 # ---- module-level helpers ---------------------------------------------------
+def _omni_text(d0, dn, res):
+    '''one OMNIWeb listing for [d0, dn) -> (text, upto).  text is None when OMNIWeb has nothing in that span;
+       upto is the first instant after the last day it can serve (None when the range was not clamped).'''
+    import requests, re
+    p = {'activity': 'retrieve', 'res': res, 'spacecraft': 'omni_' + res, 'vars': [v[0] for v in _SW.values()],
+         'start_date': d0.strftime('%Y%m%d'), 'end_date': (dn - timedelta(seconds=1)).strftime('%Y%m%d')}
+    upto = None
+    for _ in range(2):
+        t = requests.get('https://omniweb.gsfc.nasa.gov/cgi/nx1.cgi', params=p, timeout=180).text
+        m = re.search(r'INVALID (?:START|STOP) DATE, correct range:\s*(\d{8})\s*-\s*(\d{8})', t)
+        if not m:
+            return t, upto
+        lo, hi = m.groups()                                     # what OMNIWeb can serve -> clamp once and retry
+        upto = datetime.strptime(hi, '%Y%m%d') + timedelta(days=1)
+        if p['start_date'] > hi or p['end_date'] < lo:
+            return None, upto if p['start_date'] > hi else None
+        p['start_date'], p['end_date'] = max(p['start_date'], lo), min(p['end_date'], hi)
+    return None, upto
+
+
+def _parse_omni(text, res):
+    'OMNIWeb listing -> DataFrame (datetime + one column per _SW name, `_5min`-suffixed for the 5-min series; fills -> NaN)'
+    sfx, fill, rows = ('_5min' if res == '5min' else ''), [v[2] for v in _SW.values()], []
+    for ln in text.splitlines():
+        w = ln.split()
+        if len(w) != 4 + len(_SW) or not all(x.isdigit() for x in w[:4]):
+            continue
+        dt = datetime(int(w[0]), 1, 1) + timedelta(days=int(w[1]) - 1, hours=int(w[2]), minutes=int(w[3]))
+        rows.append([dt] + [np.nan if x == f else float(x) for x, f in zip(w[4:], fill)])
+    return DataFrame(rows, columns=['datetime'] + [k + sfx for k in _SW])
+
+
 def configure(**kw):
     '''persist connection settings to ~/.config/mpyricalspace/config.json (chmod 600) so
        later DataManager() / manager() calls pick them up without arguments or env vars.
