@@ -82,7 +82,23 @@ class Empirical(object):
                            self.alt if alt is None else alt, f107s=f107s, ap=ap,
                            nativelypackaged_indices=nativelypackaged_indices, rho_m3=rho_m3)
 
-    def run_igrf(self, version=14, lats=None, lons=None, alts=None):
+    def run_weimer05(self, mlat, mlt, by=None, bz=None, vsw=None, nsw=None, tilt=None, res='5min', avg=20, lag=0):
+        '''
+        Weimer (2005) high-latitude electric potential [kV] and field-aligned current [uA/m^2, + = downward]
+        at obj.time, on AACGM latitudes `mlat` [deg; negative = southern hemisphere] and magnetic local times
+        `mlt` [h] -- see models.weimer05 for the coordinates, the (time, mlat, mlt) cube / aligned-samples rule,
+        and NaN handling.
+
+        AVERAGING DEFAULT: drivers not passed in (by, bz [nT, GSM], vsw [km/s], nsw [cm^-3]) come from the
+        DataManager as the MEAN OF THE PREVIOUS 20 MIN of the 5-min OMNI series (res='5min', avg=20), the way
+        Weimer (2005b) drives the model -- not as instantaneous values. Pass avg=None, res='1min' for the
+        instantaneous 1-min value, or avg=45, lag=10 for the recipe the coefficients were fitted with
+        (Weimer 2005a). tilt=None computes the dipole tilt from obj.time.
+        '''
+        return models.weimer05(self.time, mlat, mlt, by=by, bz=bz, vsw=vsw, nsw=nsw, tilt=tilt,
+                               res=res, avg=avg, lag=lag)
+
+    def run_igrf(self, version='latest', lats=None, lons=None, alts=None):
         return models.igrf(self.time, getattr(self, 'lat', None) if lats is None else lats,
                            getattr(self, 'lon', None) if lons is None else lons,
                            getattr(self, 'alt', None) if alts is None else alts, version=version)
