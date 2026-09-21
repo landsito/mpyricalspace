@@ -1,17 +1,14 @@
-*.dat filter=lfs diff=lfs merge=lfs -text
-*.txt filter=lfs diff=lfs merge=lfs -text
-*.tar filter=lfs diff=lfs merge=lfs -text
-*.asc filter=lfs diff=lfs merge=lfs -text
-*.zip filter=lfs diff=lfs merge=lfs -text
-*.pdf filter=lfs diff=lfs merge=lfs -text
-*.gz filter=lfs diff=lfs merge=lfs -text
-*.html filter=lfs diff=lfs merge=lfs -text
-
-# Excluded from the *.txt LFS rule above: this file is tiny (376 bytes) and
-# LFS content that fails to upload leaves a broken pointer with no local
-# fallback (see native.txt's own git history) -- not worth the risk for a
-# file this small; keep it a plain git blob instead.
-native.txt !filter !diff !merge !text
+# Data files are plain git blobs, not Git LFS: together they are ~39 MB (the largest 14 MB), and LFS pointers
+# break GitHub's source archives, `pip install git+...` and clones on machines without git-lfs, and hit the
+# free LFS bandwidth quota. -text: never convert line endings -- the Fortran/C models read these files as is.
+*.dat  -text
+*.txt  -text
+*.asc  -text
+*.gz   -text
+*.pdf  -text
+*.tar  -text
+*.zip  -text
+*.html -text
 
 # ==============================================================================
 # GitHub Linguist Configuration

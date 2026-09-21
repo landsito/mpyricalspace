@@ -1,3 +1,42 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:b8ba58a2ed30c0f9df653fdaa037f61f4914c95e9eb107c4cc40a6bfd6dcd1c3
-size 2388
+Update History (starting 4/28/2015)
+
+04/28/2015   00_iri2012.tar, irisub.for, irifun.for, iritest.for
+07/12/2015   00_iri2012.tar, irisub.for, irifun.for, iritest.for, igrf.for
+07/28/2015   00_iri2012.tar, irifun.for, cira.for
+02/04/2016   00_iri2016.tar, irifun.for, irisub.for, iritest.for, mcsat%%.dat
+02/17/2016   00_iri2016.tar, igrf.for
+06/12/2016   00_iri2016.tar, irifun.for, irisub.for, iritest.for
+09/23/2016   00_iri2016.tar, irifun.for, irisub.for, iritest.for, iriflip.for
+10/30/2016   00_iri2016.tar, irifun.for, irisub.for
+02/23/2017   00_iri2016.tar, irifun.for, irisub.for, iritest.for
+11/03/2017   00_iri2016.tar, irifun.for, irisub.for, iritest.for, igrf.for
+03/26/2018   00_iri2016.tar, irifun.for, irisub.for
+04/11/2018   irifun.for
+05/13/2019   00_iri.tar, irisub.for, irifun.for, iritest.for, igrf.for, irifli           .for
+09/01/2019   irirtam.for, irirtam-test.for
+12/26/2019   irirtam.for (00_iri2016.tar still contains the old irirtam.for)
+04/06/2020   00_iri.tar, irisub.for, irifun.for, iritest.for, igrf.for, 
+             dgrf2015.dat, igrf2020.dat, igrf2020s.dat 
+09/22/2020   00_iri.tar, irisub.for, irifun.for, iritest.for, igrf.for
+10/12/2020   00_iri.tar, irifun.for, iritest.for
+10/13/2021   00_iri.tar, irisub.for, irifun.for, iritest.for, igrf.for
+01/12/2022   00_iri.tar, irisub.for, irifun.for
+08/05/2022   00_iri.tar, irisub.for, irifun.for, iritest.for, igrf.for, 
+             iridreg.for, rocdrift.for
+10/02/2022   00_iri.zip, irisub.for
+05/06/2023   00_iri.zip, irisub.for, irisub_with_pp.for, irifun.for, 
+             iritest.for, iritec.for, rocdrift.for
+05/10/2023   00_iri.zip, irisub.for, iritec.for, iritest.for
+10/29/2023   00_iri.zip, irisub.for, irifun.for, iritec.for, iritest.for, 
+             00readme.txt
+12/07/2023   00_iri.zip, irifun.for, iritec.for, rocdrift.for, 00readme.txt
+03/05/2024   00_iri.zip, iritec.for, irisub.for, iriflip.for
+11/05/2024   irisub.for
+12/10/2024   00_iri.zip, iritest.for, irisub.for, irifun.for, igrf.for, 
+             rocdrift.for
+03/20/2025   00_iri.zip, iritest.for, irisub.for, irifun.for, igrf.for,
+             dgrf2020.dat, igrf2025.dat,igrf2025s.dat
+08/19/2025   00_iri.zip, 00_iri.tar, iritest.for, irisub.for, irifun.for, 
+             igrf.for, iritec.for, iriflip.for, 00readme.txt
+09/25/2025   00_iri.zip, 00_iri.tar, iritest.for, irisub.for, irifun.for, 
+             iritec.for
