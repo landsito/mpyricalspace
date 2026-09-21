@@ -299,6 +299,24 @@ def test_jvdm1_explicit():
     assert "qvdrift_150km" in ds
 
 
+def test_jvdm1_finds_its_coefficients_from_any_directory(tmp_path, monkeypatch):
+    # regression: the C code used to open its coefficient files through an absolute path compiled in from the
+    # build machine, so on any other machine it silently returned zeros
+    from mpyricalspace import models, jvdm1 as _jv
+    monkeypatch.chdir(tmp_path)                                  # nothing jvdm1-related in this directory
+    ds = models.jvdm1_drift([datetime(2024, 5, 11, 17)], f107=100., f107a=100.)        # 12 LT at Jicamarca
+    assert 5. < float(ds.qvdrift_150km) < 40. and float(ds.qvdrift_150km_error) > 0
+    data = open(_jv.__file__, 'rb').read()
+    assert b'/drift_mean_coeffs' not in data and b'/drift_stddev_coeffs' not in data   # no baked-in path
+
+
+def test_jvdm1_missing_coefficients_raise_instead_of_returning_zeros(tmp_path, monkeypatch):
+    from mpyricalspace import models
+    monkeypatch.setattr(models, '_datadir', lambda name: str(tmp_path))                  # an empty data directory
+    with pytest.raises(RuntimeError, match='coefficient'):
+        models.jvdm1_drift([datetime(2024, 5, 11, 17)], f107=100., f107a=100.)
+
+
 def test_jvdm1_scalar_over_time(obj):
     # scalar f107/f107a gridded against the time axis (used to raise in the old Predictor)
     ds = obj.run_jvdm1(f107=100., f107a=100.)

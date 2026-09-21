@@ -1,5 +1,5 @@
-#define FILE_DRIFT_MEAN             "/Users/land/Documents/00-Code/01-ECLIPSE/mpyricalspace/src/jvdm1/drift_mean_coeffs"
-#define FILE_DRIFT_STDDEV           "/Users/land/Documents/00-Code/01-ECLIPSE/mpyricalspace/src/jvdm1/drift_stddev_coeffs"
+#define FILE_DRIFT_MEAN             "drift_mean_coeffs"
+#define FILE_DRIFT_STDDEV           "drift_stddev_coeffs"
 #define FILE_MODEL_PHI_OUT          "plot_phi_data.txt"
 #define FILE_MODEL_T_OUT            "plot_t_data1.txt"
 #define FILE_MODEL_S_OUT            "plot_s_data.txt"

@@ -485,6 +485,10 @@ install_data(
   install_dir: _pkg_data / 'hltwim',
 )
 install_data(
+  ['jvdm1/drift_mean_coeffs', 'jvdm1/drift_stddev_coeffs'],
+  install_dir: _pkg_data / 'jvdm1',
+)
+install_data(
   ['eejm/eejm1/champ_mean_coeffs', 'eejm/eejm1/champ_stddev_coeffs'],
   install_dir: _pkg_data / 'eejm1',
 )

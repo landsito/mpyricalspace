@@ -223,7 +223,8 @@ def jvdm1_drift(time, f107=None, f107a=None, slt=None, doy=None):
         warnings.warn("Alken model: %i points outside 08-16 LT set to nan" % np.count_nonzero(~day))
     DATA = np.full((_p.shape[0], 2), np.nan)
     if np.count_nonzero(day):
-        DATA[day, :] = np.array([_jvdm.jvdm1(*row) for row in _p[day, :]])
+        rows = _p[day, :]                       # the C code reads its coefficient files from the current directory
+        DATA[day, :] = np.array(_cwd_call(_datadir('jvdm1'), lambda: [_jvdm.jvdm1(*row) for row in rows]))
 
     if len(shape) == 1:
         coords = {'time': p[:, keys.index("time")],
