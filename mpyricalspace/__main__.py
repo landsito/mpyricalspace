@@ -1,7 +1,7 @@
 '''
 python -m mpyricalspace doctor                                  which compiled extensions loaded
 python -m mpyricalspace status                                  local-store coverage
-python -m mpyricalspace fetch  --from 2024-01-01 --to 2024-06-01 [--kpap-source ...] [--ae-source ...]
+python -m mpyricalspace fetch  --from 2024-01-01 --to 2024-06-01 [--kpap-source ...] [--ae-source ...] [--include kpap ae dst asy sw1 sw5]
 python -m mpyricalspace update [--since 2024-01-01]             extend every series toward today
 python -m mpyricalspace config --mongo-uri ... --data-dir ...
 python -m mpyricalspace vscode [install|build|status]           companion VS Code extension
@@ -19,6 +19,8 @@ f.add_argument('--from', dest='d0', required=True)
 f.add_argument('--to',   dest='dn', required=True)
 f.add_argument('--kpap-source', default='potsdam')
 f.add_argument('--ae-source',   default='auto')
+f.add_argument('--include', nargs='+', choices=['kpap', 'ae', 'dst', 'asy', 'sw1', 'sw5'],
+               help='only these groups (sw1/sw5 = OMNI 1-min/5-min solar wind); default: all')
 c = sub.add_parser('config')
 for opt in ('--mongo-uri', '--mongo-user', '--mongo-password', '--data-dir'):
     c.add_argument(opt)
@@ -61,7 +63,7 @@ dm = DataManager()
 if a.cmd == 'status':
     dm.status()
 elif a.cmd == 'fetch':
-    dm.fetch(a.d0, a.dn, kpap_source=a.kpap_source, ae_source=a.ae_source)
+    dm.fetch(a.d0, a.dn, kpap_source=a.kpap_source, ae_source=a.ae_source, include=a.include)
     dm.status()
 elif a.cmd == 'update':
     dm.update(since=datetime.fromisoformat(a.since) if a.since else None)
