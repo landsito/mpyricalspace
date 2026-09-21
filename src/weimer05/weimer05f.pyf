@@ -1,0 +1,26 @@
+!    -*- f90 -*-
+! Note: the context of this file is case sensitive.
+!
+! Hand-written on purpose (do not regenerate it with `f2py -h`): only the driver is exposed. f2py's automatic
+! signature would also wrap every variable of the read_data / w05sc modules and need extra module wrappers.
+! The model needs 8-byte reals (compiled with -fdefault-real-8), hence real(kind=8) here.
+
+python module weimer05f ! in
+    interface  ! in :weimer05f
+        subroutine weimer05_batch(by,bz,tilt,swvel,swden,mlat,mlt,path,xnan,epot,fac,ier,n) ! in :weimer05f:weimer05_batch.f90
+            real(kind=8) dimension(n),intent(in) :: by
+            real(kind=8) dimension(n),intent(in),depend(by) :: bz
+            real(kind=8) dimension(n),intent(in),depend(by) :: tilt
+            real(kind=8) dimension(n),intent(in),depend(by) :: swvel
+            real(kind=8) dimension(n),intent(in),depend(by) :: swden
+            real(kind=8) dimension(n),intent(in),depend(by) :: mlat
+            real(kind=8) dimension(n),intent(in),depend(by) :: mlt
+            character*(*) intent(in) :: path
+            real(kind=8) intent(in) :: xnan
+            real(kind=8) dimension(n),intent(out),depend(by) :: epot
+            real(kind=8) dimension(n),intent(out),depend(by) :: fac
+            integer intent(out) :: ier
+            integer intent(hide),depend(by) :: n=len(by)
+        end subroutine weimer05_batch
+    end interface
+end python module weimer05f

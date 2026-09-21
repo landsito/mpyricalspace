@@ -43,6 +43,29 @@ py3.extension_module('scherliessfejerf',
    subdir: 'mpyricalspace'
 )
 
+weimer05_module = custom_target('weimer05_module',
+   output: 'weimer05fmodule.c',
+   input: ['weimer05/weimer05f.pyf'],
+   command: [py3, generate_f2pymod, '@INPUT@', '-o', '@OUTDIR@']
+)
+
+# Only weimer05_batch is exposed to python (weimer05f.pyf); read_data/w05sc are compiled in because the driver
+# calls them. The model needs 8-byte reals, so -fdefault-real-8 goes on this target only (the project-wide
+# -fno-automatic it also relies on is already set above). Meson orders the read_data -> w05sc -> driver modules itself.
+py3.extension_module('weimer05f',
+   ['weimer05/read_data.f90',
+    'weimer05/w05sc.f90',
+    'weimer05/weimer05_batch.f90',
+    weimer05_module,
+   ],
+   include_directories: [inc_np, inc_f2py],
+   dependencies: fortranobject_dep,
+   fortran_args: ['-fdefault-real-8'],
+   install: true,
+   link_language: 'fortran',
+   subdir: 'mpyricalspace'
+)
+
 # Keep hwm14/hwm07's own files in sync with map.nrl.navy.mil before either
 # extension_module() below references them -- see hwm/sync_hwm.py's own
 # docstring for what this does and does not touch, and why.
@@ -482,6 +505,15 @@ install_data(
    'ppeefm1/ace2004.dat.gz', 'ppeefm1/ace2005.dat.gz', 'ppeefm1/ace2006.dat.gz',
    'ppeefm1/ace2007.dat.gz'],
   install_dir: _pkg_data / 'ppeefm1',
+)
+
+# the LICENSE travels with the data: it asks for attribution to be kept with any redistribution
+install_data(
+  ['weimer05/W05scEpot.dat', 'weimer05/W05scBpot.dat',
+   'weimer05/SCHAtable.dat',
+   'weimer05/W05scBndy.dat',
+   'weimer05/LICENSE'],
+  install_dir: _pkg_data / 'weimer05',
 )
 
 # apf107.dat/ig_rz.dat/CCIR/URSI come from iri/common/ (shared across every IRI

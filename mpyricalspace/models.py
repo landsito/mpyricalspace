@@ -24,6 +24,7 @@ from mpyricalspace import jvdm1 as _jvdm
 from mpyricalspace import eejm1 as _eejm1, eejm2 as _eejm2, eefm1 as _eefm1
 from mpyricalspace import ppeefm1 as _ppeefm1
 from mpyricalspace import igrf14f, igrf13f, igrf12f, igrf11f, igrf10f, igrf09f, iri26f, iri20f, iri16f, iri12f, iri07f, iri01f
+from mpyricalspace import weimer05f as _w05
 from mpyricalspace._grid import flatten_ndgrid, fortran_cwd, pack
 from mpyricalspace.DataManager import manager
 
@@ -540,10 +541,10 @@ def hltwim(time, lat, lon, kp=None, ut=None, doy=None):
 # ===========================================================================
 #  Geomagnetic field & ionosphere -- IGRF, NRLMSIS, IRI
 # ===========================================================================
-def igrf(time, lat, lon, alt, version=14):
+def igrf(time, lat, lon, alt, version='latest'):
     '''
-    xr.Dataset with Bx, By, Bz, B [T], dip, dec, inc [deg]. version = 14 (default) | 13 | 12
-    | 11 | 10 | 9. Source lives under src/igrf/ -- each version is one self-contained
+    xr.Dataset with Bx, By, Bz, B [T], dip, dec, inc [deg]. version = 'latest' (default: the newest
+    generation bundled, currently 14) | 14 | 13 | 12 | 11 | 10 | 9. Source lives under src/igrf/ -- each version is one self-contained
     igrf<N>.f (coefficients baked in as DATA statements, no external files at all, unlike
     IRI); see src/igrf/sync_igrf.py (keeps it in sync with ngdc.noaa.gov) and
     src/igrf/build_pyf.py (regenerates a version's f2py .pyf, injecting the intent(in)/
@@ -562,8 +563,10 @@ def igrf(time, lat, lon, alt, version=14):
     _syn = {14: igrf14f.igrf14syn, 13: igrf13f.igrf13syn, 99: igrf13f.igrf13syn,
             12: igrf12f.igrf12syn, 11: igrf11f.igrf11syn,
             10: igrf10f.igrf10syn, 9: igrf09f.igrf9syn}
+    if version in ('latest', None):
+        version = max(v for v in _syn if v != 99)          # 99 is the pyIGRF fallback, not a generation
     if version not in _syn:
-        raise ValueError("IGRF version must be 14, 13, 12, 11, 10 or 9 (got %s)" % version)
+        raise ValueError("IGRF version must be 'latest', 14, 13, 12, 11, 10 or 9 (got %s)" % version)
     syn = _syn[version]
     IGRF = lambda yr, al, la, lo: syn(0, yr, 1, al, 90 - la, lo % 360)
     if version == 99:
@@ -1005,3 +1008,139 @@ def manoj_maus(time, d0, dn, freq, lon=-77., data=None, nativelypackaged_code=Fa
         data_vars={"mV_to_ms": ('time', factor), "vdrift_manoj": ('time', factor * tef),
                    "prompt_manoj": ('time', factor * ppef), "qvdrift": ('time', qref)},
         coords={'time': dts})
+
+# ===========================================================================
+#  High-latitude electric potential and field-aligned current -- Weimer 2005
+# ===========================================================================
+# IGRF-14 dipole terms (g10, g11, h11 [nT]) every 5 yr, copied from src/igrf/igrf14/igrf14.f; the tilt
+# interpolates linearly between epochs and extrapolates past 2025 with the 2025-2030 secular variation.
+# When a newer IGRF generation is vendored under src/igrf/, refresh this table -- tests/test_weimer05.py
+# fails while it lags the newest bundled source.
+_DIPOLE = np.array([[1980, -29992., -1956., 5604.], [1985, -29873., -1905., 5500.], [1990, -29775., -1848., 5406.],
+                    [1995, -29692., -1784., 5306.], [2000, -29619.4, -1728.2, 5186.1], [2005, -29554.63, -1669.05, 5077.99],
+                    [2010, -29496.57, -1586.42, 4944.26], [2015, -29441.46, -1501.77, 4795.99],
+                    [2020, -29403.41, -1451.37, 4653.35], [2025, -29350.0, -1410.3, 4545.5]])
+_DIPOLE_SV = np.array([12.6, 10.0, -21.5])
+
+
+def dipole_tilt(time):
+    '''
+    Geomagnetic dipole tilt [deg] at `time` -- the angle of the north geomagnetic pole out of the GSM x-y plane
+    (+ when it leans toward the Sun, i.e. northern summer). Sun from the low-precision almanac formulae
+    (~0.01 deg) and the IGRF-14 dipole, so it is good to a few hundredths of a degree from 1980 on.
+    '''
+    t = np.atleast_1d(np.asarray(time, dtype='datetime64[s]'))
+    d = (t - np.datetime64('2000-01-01T12:00:00')).astype(float) / 86400.            # days since J2000
+    rad = np.radians
+    g = rad(357.528 + 0.9856003 * d)
+    lam = rad(280.460 + 0.9856474 * d + 1.915 * np.sin(g) + 0.020 * np.sin(2 * g))   # sun ecliptic longitude
+    eps = rad(23.439 - 4.e-7 * d)
+    sx, sy, sz = np.cos(lam), np.sin(lam) * np.cos(eps), np.sin(lam) * np.sin(eps)     # sun direction, GEI
+    th = rad(280.46061837 + 360.98564736629 * d)                                      # GMST: GEI -> GEO about z
+    gx, gy = np.cos(th) * sx + np.sin(th) * sy, -np.sin(th) * sx + np.cos(th) * sy
+    y0 = t.astype('datetime64[Y]')
+    year = y0.astype(int) + 1970. + (t - y0.astype('datetime64[s]')).astype(float) / 3.15576e7
+    g10, g11, h11 = (np.where(year > 2025, _DIPOLE[-1, k] + _DIPOLE_SV[k - 1] * (year - 2025),
+                              np.interp(year, _DIPOLE[:, 0], _DIPOLE[:, k])) for k in (1, 2, 3))
+    b0 = np.sqrt(g10 ** 2 + g11 ** 2 + h11 ** 2)
+    return np.degrees(np.arcsin(np.clip((-g11 * gx - h11 * gy - g10 * sz) / b0, -1, 1)))    # north pole = -(g11, h11, g10)/B0
+
+
+def weimer05(time, mlat, mlt, by=None, bz=None, vsw=None, nsw=None, tilt=None, res='5min', avg=20, lag=0):
+    '''
+    Weimer high-latitude electric potential and field-aligned current: the spherical-cap-harmonic (SCHA)
+    revision (Weimer 2005b, JGR 110, A12307) of the models of Weimer (2005a, JGR 110, A05306), in the Fortran
+    translation by B. Foster (HAO/NCAR). Returns an xr.Dataset:
+      epot   electric potential [kV]
+      fac    field-aligned current density [uA/m^2] at 110 km, POSITIVE = DOWNWARD (into the ionosphere)
+    NaN equatorward of the auroral cap (the model's low-latitude boundary, ~24-36 deg colatitude for normal
+    conditions) and wherever a driver is missing; plus the drivers used (by, bz, vsw, nsw, tilt) along `time`.
+
+    time         datetime(s).
+    mlat, mlt    AACGM (altitude-adjusted corrected geomagnetic) latitude [deg] and magnetic local time [h] of the
+                 points -- the coordinates the model was built in (Weimer 2005a, sec. 2 and appendix A); converting
+                 geographic -> AACGM is up to the caller (e.g. aacgmv2, a modern AACGM implementation). Negative
+                 latitudes are the southern hemisphere, handled as in Weimer (2005a, sec. 5): the model is mirrored,
+                 with the signs of By and of the dipole tilt reversed. If time, mlat and mlt all have the same
+                 length they are aligned samples (e.g. a satellite track); otherwise the result is a
+                 (time, mlat, mlt) cube. `fac` is a density on the magnetic grid: mapping it to a geographic grid
+                 needs the area-element compensation of Richmond (1995).
+    by, bz       IMF, GSM [nT];  vsw solar-wind speed [km/s];  nsw proton density [cm^-3]. Scalar, or one value
+                 per time; None -> from the DataManager (NOAA OMNI, already propagated to the bow shock). The
+                 fits used IMF magnitudes below ~15 nT; far larger values are extrapolation (Weimer 2005a, sec. 10).
+    tilt         dipole tilt [deg]; None -> dipole_tilt(time).
+    res, avg, lag  How a driver that is NOT given is taken from the DataManager (NOAA OMNI).
+                 DEFAULT: res='5min', avg=20 -- each driver is the MEAN OF THE PREVIOUS 20 MIN of the 5-min series,
+                 which is how Weimer (2005b, sec. 4) drives the models; it is not the instantaneous value.
+                 res: '1min' | '5min' series (5-min goes back to 1981, 1-min to 1995). avg, lag [min]: the mean over
+                 the `avg` minutes that end `lag` minutes before `time`; avg=None, lag=0 is the value at `time`.
+                 Other recipes: avg=45, lag=10 is how the models' coefficients were derived (the propagated IMF from
+                 55 to 10 min before each pass, 2005a sec. 2); res='1min', avg=None is instantaneous.
+                 Values you pass in `by`, `bz`, `vsw`, `nsw` are used as given -- no averaging is applied to them.
+                 Missing solar-wind values give NaN rows; the papers substitute average values (2005a) or hold the
+                 last known density (2005b, which finds it matters little) -- pass `nsw=` explicitly to do that.
+    '''
+    if res not in ('1min', '5min'):
+        raise ValueError("res must be '1min' or '5min' (got %r)" % (res,))
+    dts = _t2dt(time); nt = dts.size
+    la = np.atleast_1d(np.asarray(mlat, float))
+    mt = np.mod(np.atleast_1d(np.asarray(mlt, float)), 24.)
+
+    def per_time(val, name):
+        if val is not None:
+            a = np.asarray(val, float).reshape(-1)
+            a = np.full(nt, a[0]) if a.size == 1 else a
+            if a.size != nt:
+                raise ValueError("%s must be a scalar or have one value per time (%d), got %d" % (name, nt, a.size))
+            return a
+        p = name + ('_5min' if res == '5min' else '')
+        # repeated times (a grid at one time, a track sampled below the store's cadence) are looked up once
+        uniq, inv = np.unique(np.array(dts, dtype='datetime64[s]'), return_inverse=True)
+        ud = uniq.astype(datetime)
+        if avg is None and not lag:
+            return manager().get_values(ud, p)[inv]
+        step = 5 if res == '5min' else 1
+        k, back = max(int(round((avg or step) / step)), 1), int(round(lag / step))
+        h = manager().get_history(ud, p, [-(k - 1) - back, -back], timedelta(minutes=step))
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', RuntimeWarning)                      # an all-NaN window -> NaN
+            return np.nanmean(h, axis=1)[inv]
+
+    drv = {'by': per_time(by, 'by'), 'bz': per_time(bz, 'bz'), 'vsw': per_time(vsw, 'vsw'), 'nsw': per_time(nsw, 'nsw'),
+           'tilt': per_time(tilt, 'tilt') if tilt is not None else dipole_tilt(dts)}
+
+    # rows: the points of one time step are contiguous (the Fortran driver re-uses its set-up between rows that
+    # share drivers, so a full grid per step costs one set-up)
+    inv = None
+    if nt == la.size == mt.size:                                                  # aligned samples
+        ti, lat_r, mlt_r, shape = np.arange(nt), la, mt, None
+    else:                                                                         # (time, mlat, mlt) cube
+        if (la < 0).any() and (la >= 0).any():                                    # each hemisphere contiguous per step
+            order = np.argsort(la < 0, kind='stable'); inv = np.argsort(order); la_o = la[order]
+        else:
+            la_o = la
+        ti = np.repeat(np.arange(nt), la.size * mt.size)
+        lat_r, mlt_r = np.tile(np.repeat(la_o, mt.size), nt), np.tile(mt, nt * la.size)
+        shape = (nt, la.size, mt.size)
+    south = np.where(lat_r < 0, -1., 1.)                     # southern hemisphere: mirror, By and tilt change sign
+    row = lambda k: np.ascontiguousarray(drv[k][ti], dtype=float)
+
+    epot, fac, ier = _w05.weimer05_batch(row('by') * south, row('bz'), row('tilt') * south, row('vsw'), row('nsw'),
+                                         np.abs(lat_r), mlt_r, _datadir('weimer05'), np.nan)
+    if inv is not None:                                                            # back to the caller's mlat order
+        epot, fac = (v.reshape(shape)[:, inv, :].reshape(-1) for v in (epot, fac))
+    if ier == 1:
+        raise FileNotFoundError("Weimer05 data files (W05scEpot.dat, W05scBpot.dat, SCHAtable.dat, W05scBndy.dat) "
+                                "not found in %s" % _datadir('weimer05'))
+    if ier == 2:
+        warnings.warn("Weimer05: for some times the drivers give an auroral-cap size outside what the model's tables "
+                      "support (extreme storm conditions); those times are NaN", RuntimeWarning)
+
+    t64 = np.array(dts, dtype='datetime64[s]')
+    ds = pack({'epot': epot, 'fac': fac}, t64, ['time', 'mlat', 'mlt'], shape,
+              {'time': t64, 'mlat': la, 'mlt': mt})
+    ds = ds.assign({k: ('time', v) for k, v in drv.items()})
+    ds['epot'].attrs.update(units='kV', long_name='electric potential')
+    ds['fac'].attrs.update(units='uA/m^2', long_name='field-aligned current density at 110 km',
+                           positive='downward (into the ionosphere)')
+    return ds.squeeze()

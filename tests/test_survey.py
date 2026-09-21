@@ -17,8 +17,9 @@ def _orbit(n=40, alt_km=400.0, year=2004):
 
 def test_model_domains():
     d = survey.model_domains()
-    assert {"igrf", "msis", "hwm", "iri", "hltwim", "sf", "rocsat", "eej", "eef", "manoj"} == set(d)
+    assert {"igrf", "msis", "hwm", "iri", "hltwim", "weimer05", "sf", "rocsat", "eej", "eef", "manoj"} == set(d)
     assert d["iri"]["kind"] == "global" and d["eej"]["kind"] == "equator"
+    assert d["weimer05"]["kind"] == "high_lat" and d["weimer05"]["altitude_km"] == (0.0, 2000.0)
     assert d["sf"]["maglat_deg"] == 2.5 and d["eej"]["altitude_km"] == (90.0, 130.0)
 
 
@@ -81,3 +82,74 @@ def test_run_grid_dims():
     fin = np.isfinite(ds.sf_qvdrift.data)
     assert fin[ds.lat.data == 0].any()
     assert not fin[np.abs(ds.lat.data) == 40].any()
+
+
+# ------------------------------------------------------------------------------------------- weimer05
+DRV = dict(by=0., bz=-5., vsw=450., nsw=9., tilt=0.)         # explicit drivers: no index store, no network
+
+
+def _polar():
+    t0 = datetime(2024, 5, 12, 4, 0)
+    times = [t0 + timedelta(minutes=k) for k in range(6)]
+    lats = [65., 70., 80., -70., 20., 72.]                   # 3 north, 1 south, 1 too low, 1 above 2000 km
+    lons = [-100., -98., -96., 120., 10., -94.]
+    alts = [400., 400., 400., 400., 400., 3000.]
+    return times, lats, lons, alts
+
+
+def test_weimer05_default_run_at_low_latitude_is_nan_and_needs_nothing():
+    times, lats, lons, alts = _orbit(n=8)                    # +-25 deg: the auroral cap is out of reach
+    ds = survey.run_track(times, lats, lons, alts, models=["weimer05"])
+    assert ds.attrs["models"] == ["weimer05"] and ds.attrs["skipped"] == {}
+    assert not np.isfinite(ds.weimer05_epot.data).any() and not np.isfinite(ds.weimer05_fac.data).any()
+
+
+def test_run_track_weimer05_matches_a_direct_call():
+    import aacgmv2                                            # a package dependency: missing = a broken install
+    from mpyricalspace import models
+    times, lats, lons, alts = _polar()
+    ds = survey.run_track(times, lats, lons, alts, models=["weimer05"], weimer_kw=DRV)
+    assert ds.attrs["models"] == ["weimer05"] and ds.attrs["skipped"] == {}
+    assert {"weimer05_epot", "weimer05_fac", "weimer05_mlat", "weimer05_mlt", "weimer05_tilt"} <= set(ds.data_vars)
+
+    # the same samples converted one by one (exact time) and passed to models.weimer05 as aligned samples
+    ok = [0, 1, 2, 3]
+    ml, mt = [], []
+    for i in ok:
+        a, b, _ = aacgmv2.convert_latlon(lats[i], lons[i], alts[i], times[i], method_code="G2A")
+        ml.append(a)
+        mt.append(float(np.asarray(aacgmv2.convert_mlt(b, times[i])).reshape(-1)[0]))
+    direct = models.weimer05([times[i] for i in ok], ml, mt, **DRV)
+    assert np.allclose(ds.weimer05_mlat.data[ok], ml, atol=1e-2) and np.allclose(ds.weimer05_mlt.data[ok], mt, atol=1e-2)
+    assert np.allclose(ds.weimer05_epot.data[ok], direct.epot.values, atol=0.1, equal_nan=True)
+    assert np.isfinite(ds.weimer05_epot.data[:3]).all() and np.isfinite(ds.weimer05_fac.data[:3]).all()
+    assert np.isfinite(ds.weimer05_epot.data[3])                             # southern hemisphere: the mirrored model
+    assert not np.isfinite(ds.weimer05_epot.data[4:]).any()                  # 20 deg latitude; and above 2000 km
+
+
+def test_run_track_weimer05_single_sample():
+    import aacgmv2  # noqa: F401
+    ds = survey.run_track([datetime(2024, 5, 12, 4, 0)], [75.], [-100.], [400.], models=["weimer05"], weimer_kw=DRV)
+    assert ds.sizes["time"] == 1 and np.isfinite(ds.weimer05_epot.data).all()
+
+
+def test_run_grid_weimer05_agrees_with_run_track():
+    import aacgmv2  # noqa: F401
+    t = datetime(2024, 5, 12, 4, 0)
+    lats, lons = np.arange(60.0, 90.1, 10.0), np.arange(-180.0, 180.0, 60.0)
+    grid = survey.run_grid(times=[t], lats=lats, lons=lons, alts=[400.0], models=["weimer05"], weimer_kw=DRV)
+    assert grid.weimer05_epot.dims == ("lat", "lon") and grid.weimer05_epot.shape == (4, 6)
+    la, lo = np.meshgrid(lats, lons, indexing="ij")
+    track = survey.run_track([t] * la.size, la.ravel(), lo.ravel(), [400.0] * la.size,
+                             models=["weimer05"], weimer_kw=DRV)
+    assert np.array_equal(grid.weimer05_epot.values.ravel(), track.weimer05_epot.values, equal_nan=True)
+    assert np.isfinite(grid.weimer05_epot.values).sum() >= 15                # most of a 60-90 deg cap is inside
+
+
+def test_weimer05_without_aacgmv2_is_skipped_with_a_message(monkeypatch):
+    import sys
+    monkeypatch.setitem(sys.modules, "aacgmv2", None)                        # `import aacgmv2` -> ImportError
+    times, lats, lons, alts = _polar()
+    ds = survey.run_track(times, lats, lons, alts, models=["weimer05"], weimer_kw=DRV)
+    assert "aacgmv2" in ds.attrs["skipped"]["weimer05"] and ds.attrs["models"] == []
+

@@ -15,7 +15,16 @@ Each model is evaluated only where it is defined; everything else is NaN.
 why.  Variables carry the model name (``igrf_B``, ``hwm_u``, ``iri_NMF2``,
 ``eej``, ``eef``, ``sf_qvdrift``, ``manoj_ppef`` ...).
 
-The global models (IGRF, MSIS, HWM, IRI) are evaluated at every sample.  The
+The global models (IGRF, MSIS, HWM, IRI) are evaluated at every sample.  The high-latitude ones
+(HL-TWiM, Weimer) are evaluated only poleward of their boundary:
+
+    weimer05  Weimer (2005) electric potential [kV] and field-aligned current [uA/m^2, + downward], driven by
+              the IMF / solar wind from the DataManager.  Uses `aacgmv2` (a package dependency) for geographic -> AACGM; only samples
+              poleward of 30 deg geographic latitude are converted, everything else is NaN, and so is anything
+              above 2000 km (AACGM's limit).  Variables weimer05_epot / _fac plus the AACGM coordinates and the
+              drivers used (weimer05_mlat, _mlt, _by, _bz, _vsw, _nsw, _tilt).  Options via weimer_kw={...}
+              (by, bz, vsw, nsw, tilt, res, avg, lag -- see models.weimer05; default drivers are the previous
+              20 min of the 5-min OMNI series).  fac is the density at 110 km, not at the sample altitude.  The
 equatorial-electrodynamics models describe a quantity at the magnetic equator as
 a function of longitude and local time -- NOT of the sample's latitude -- so they
 are computed only within a few degrees of the dip equator (IGRF dip latitude, at
@@ -35,7 +44,9 @@ Jicamarca model -- use ``run_scherliessfejer`` at a fixed longitude for that.
 storm statistics giving a drift [m/s] vs a solar-wind transfer function giving
 the equatorial E-field [mV/m]); pick one.
 '''
+import logging
 import warnings
+from datetime import datetime
 
 import numpy as np
 import xarray as xr
@@ -52,7 +63,7 @@ _JRO_LON = _m.JRO[1]
 # and returns the model's xr.Dataset on the 'time' axis.
 
 def _a_igrf(t, lat, lon, alt, o):
-    return _m.igrf(t, list(lat), list(lon), list(alt), version=o.get('igrf_version', 14))
+    return _m.igrf(t, list(lat), list(lon), list(alt), version=o.get('igrf_version', 'latest'))
 
 
 def _a_msis(t, lat, lon, alt, o):
@@ -91,6 +102,57 @@ def _a_sf(t, lat, lon, alt, o):
     return _m.scherliess_fejer(t, lon=list(lon))[['qvdrift']].rename(qvdrift='sf_qvdrift')
 
 
+_WEIMER_MIN_LAT = 30.0        # geographic |lat| below which the auroral cap is out of reach: not evaluated, NaN
+_WEIMER_VARS = ('epot', 'fac', 'mlat', 'mlt', 'by', 'bz', 'vsw', 'nsw', 'tilt')
+
+
+def _aacgm(t, lat, lon, alt):
+    '''geographic (lat, lon [deg], alt [km]) at times t -> AACGM-v2 (mlat [deg], mlt [h]); NaN where undefined.
+       mlat / mlon are computed per calendar day (the coefficients move ~1e-4 deg/day), MLT per sample.'''
+    try:
+        import aacgmv2
+    except ImportError as e:
+        raise ImportError("weimer05 needs `aacgmv2` to convert geographic coordinates to AACGM "
+                          "(pip install aacgmv2)") from e
+    dts = t.astype('datetime64[s]').astype(datetime)
+    day = t.astype('datetime64[D]')
+    h = np.clip(alt, 0., 2000.)                                   # AACGM-v2 coefficients stop at 2000 km (masked anyway)
+    mlat, mlon, mlt = (np.full(t.size, np.nan) for _ in range(3))
+    log = logging.getLogger('aacgmv2')
+    old, log.level = log.level, logging.ERROR                     # it logs every point near the equator
+    try:
+        for d in np.unique(day):
+            ix = day == d
+            mid = (d.astype('datetime64[s]') + np.timedelta64(12, 'h')).astype(datetime)
+            a, b, _ = aacgmv2.convert_latlon_arr(lat[ix], lon[ix], h[ix], mid, method_code='G2A')
+            mlat[ix], mlon[ix] = a, b
+        ok = np.isfinite(mlon)
+        if ok.any():
+            mlt[ok] = np.asarray(aacgmv2.convert_mlt(mlon[ok], dts[ok]), float).reshape(-1)
+    finally:
+        log.level = old
+    return mlat, mlt
+
+
+def _a_weimer05(t, lat, lon, alt, o):
+    '''Weimer (2005) potential [kV] / field-aligned current [uA/m^2, + downward]: the samples are converted to
+       AACGM and evaluated as aligned (time, mlat, mlt) samples. Only |lat| >= 30 deg is converted; the rest
+       (and AACGM-undefined points) stay NaN. `weimer_kw` are models.weimer05 keyword arguments (per-sample
+       arrays of length n are subset along with the samples).'''
+    kw = dict(o.get('weimer_kw') or {})
+    n = t.size
+    cols = {k: np.full(n, np.nan) for k in _WEIMER_VARS}
+    sel = np.abs(lat) >= _WEIMER_MIN_LAT
+    if sel.any():
+        mlat, mlt = _aacgm(t[sel], lat[sel], lon[sel], alt[sel])
+        sub = {k: (np.asarray(v)[sel] if np.ndim(v) and np.size(v) == n else v) for k, v in kw.items()}
+        ds = _m.weimer05(t[sel], mlat, mlt, **sub)
+        for k in ('epot', 'fac', 'by', 'bz', 'vsw', 'nsw', 'tilt'):
+            cols[k][sel] = ds[k].values.reshape(-1)              # reshape: a single sample comes back squeezed
+        cols['mlat'][sel], cols['mlt'][sel] = mlat, mlt
+    return xr.Dataset({k: ('time', v) for k, v in cols.items()}, coords={'time': t})
+
+
 def _a_manoj(t, lat, lon, alt, o):
     '''Manoj-Maus RTEEF prompt-penetration equatorial E-field [mV/m], local model.
        ppef is the ACE IEF Ey run through the TF.COF filter -- a single
@@ -120,6 +182,7 @@ _REGISTRY = {
     'hwm':    dict(kind='global',   adapter=_a_hwm,    alt_km=(0., 500.),    maglat=None, needs_alt=True),
     'iri':    dict(kind='global',   adapter=_a_iri,    alt_km=(60., 2000.),  maglat=None, needs_alt=True),
     'hltwim': dict(kind='high_lat', adapter=_a_hltwim, alt_km=None,          maglat=None, needs_alt=False),
+    'weimer05': dict(kind='high_lat', adapter=_a_weimer05, alt_km=(0., 2000.), maglat=None, needs_alt=True),
     'sf':     dict(kind='equator',  adapter=_a_sf,     alt_km=(200., 900.),  maglat=2.5,  needs_alt=False),
     'rocsat': dict(kind='equator',  adapter=_a_rocsat, alt_km=(200., 900.),  maglat=3.0,  needs_alt=False),
     'eej':    dict(kind='equator',  adapter=_a_eej,    alt_km=(90., 130.),   maglat=5.0,  needs_alt=False),
@@ -127,7 +190,7 @@ _REGISTRY = {
     'manoj':  dict(kind='equator',  adapter=_a_manoj,  alt_km=(200., 900.),  maglat=5.0,  needs_alt=False),
 }
 
-_FULL_NAME = {'sf': 'scherliess_fejer (quiet)', 'manoj': 'manoj_maus (local RTEEF)',
+_FULL_NAME = {'weimer05': 'weimer05 (Weimer 2005, AACGM)', 'sf': 'scherliess_fejer (quiet)', 'manoj': 'manoj_maus (local RTEEF)',
               'eej': 'eej', 'eef': 'eef', 'rocsat': 'rocsat_drift'}
 
 
@@ -136,7 +199,8 @@ def model_domains():
        in run_track / run_grid applies.'''
     note = {
         'global':   'evaluated at every sample',
-        'high_lat': 'auroral / polar cap only (|QD magnetic latitude| > 40 deg); NaN elsewhere',
+        'high_lat': 'auroral / polar cap only (hltwim: |QD magnetic latitude| > 40 deg; weimer05: poleward of '
+                    'the auroral boundary, |geographic latitude| >= 30 deg); NaN elsewhere',
         'equator':  'a magnetic-equator quantity vs longitude; masked to the dip equator and its altitude regime',
     }
     return {name: {'kind': r['kind'], 'altitude_km': r['alt_km'], 'maglat_deg': r['maglat'],
@@ -172,7 +236,9 @@ def run_track(times, lats, lons, alts=None, models=None, equator_deg=20.0, **opt
              cap (see model_domains()).
     **opts : igrf_version / hwm_version / iri_version / eej_model / iri_ions / rho_m3 /
              nativelypackaged_indices (iri / msis / manoj -- False: DataManager (default);
-             True: each model's own bundled index file).
+             True: each model's own bundled index file) / weimer_kw (dict of models.weimer05
+             keyword arguments -- by, bz, vsw, nsw, tilt, res, avg, lag; default: the IMF / solar wind
+             from the DataManager as the mean of the previous 20 min of the 5-min series).
 
     Out-of-domain samples come back as NaN.  ``ds.attrs['models']`` lists what
     ran, ``ds.attrs['skipped']`` what did not and why.

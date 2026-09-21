@@ -21,7 +21,8 @@ EX = pathlib.Path(__file__).resolve().parent.parent / "examples"
 RUNNABLE = ["plot_hltwim_fig12.py", "plot_hwm14_fig03.py", "plot_jvdm1_fig04.py",
             "plot_rocsat_fig03.py", "plot_sfqq_fig06.py", "plot_sfdd_fig07.py",
             "plot_sfpp_fig04.py", "plot_mm_fig02.py",
-            "plot_eef_fig06.py", "plot_eej_fig02.py", "plot_survey_track.py"]
+            "plot_eef_fig06.py", "plot_eej_fig02.py", "plot_survey_track.py",
+            "plot_weimer05_fig02.py"]
 
 
 @pytest.mark.parametrize("name", RUNNABLE)

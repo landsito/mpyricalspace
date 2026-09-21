@@ -35,6 +35,7 @@ dependencies = [
     "pymongo",
     "pillow",
     "requests",
+    "aacgmv2",                 # geographic -> AACGM, for the Weimer model in survey.run_track / run_grid
 ]
 
 [project.optional-dependencies]
