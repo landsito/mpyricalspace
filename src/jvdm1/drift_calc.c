@@ -71,8 +71,14 @@ drift_calc_alloc()
       return 0;
     }
 
-  read_coeffs(FILE_DRIFT_MEAN, w->mean_coeffs);
-  read_coeffs(FILE_DRIFT_STDDEV, w->stddev_coeffs);
+  /* the files are opened relative to the current directory (the python wrapper changes into the package's
+     data directory first); a missing or short file must not silently give an all-zero model */
+  if (read_coeffs(FILE_DRIFT_MEAN, w->mean_coeffs) != w->mean_coeffs->size ||
+      read_coeffs(FILE_DRIFT_STDDEV, w->stddev_coeffs) != w->stddev_coeffs->size)
+    {
+      drift_calc_free(w);
+      return 0;
+    }
 
   return (w);
 } /* drift_calc_alloc() */
