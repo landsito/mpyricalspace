@@ -403,7 +403,23 @@ def eef(time, lon=None, flux=None, slts=None, doys=None, lunars=None):
 try:
     os.environ.setdefault('HWMPATH', _datadir('hwm14'))
 except FileNotFoundError:
-    pass          # hwm14() itself will fail loudly if the data really is missing
+    pass          # _check_hwmpath() fails loudly if the data really is missing
+
+_HWMPATH_MAX = 1024           # findandopen's `character(1024) :: hwmpath` (see src/hwm/sync_hwm.py POST_PATCHES)
+_HWM14_FILES = ('hwm123114.bin', 'dwm07b104i.dat', 'gd2qd.dat')
+
+
+def _check_hwmpath():
+    '''HWM14's Fortran STOPs -- ending the whole Python process, no exception -- when it cannot
+       open a data file, and it silently truncates a $HWMPATH longer than its buffer. Check first.'''
+    path = os.environ.get('HWMPATH', '')
+    for fn in _HWM14_FILES:
+        full = os.path.join(path, fn)
+        if len(full) > _HWMPATH_MAX:
+            raise RuntimeError("HWM14: $HWMPATH/%s is %d characters, over the Fortran limit of %d: %s"
+                               % (fn, len(full), _HWMPATH_MAX, full))
+        if not (os.path.isfile(full) or os.path.isfile(fn)):   # findandopen also tries the cwd
+            raise FileNotFoundError("HWM14: %s not found in $HWMPATH=%r" % (fn, path))
 
 _HWM = {2014: (_hwm14, 'hwm14_batch', None),
         2007: (_hwm07, 'hwm07_batch', 'hwm07'),        # 3rd item: data dir needing chdir
@@ -417,6 +433,8 @@ def hwm(time, lat, lon, alt, ap=None, version=2014, ut=None, doy=None):
     '''
     if version not in _HWM:
         raise ValueError("HWM version must be 2014, 2007 or 1993 (got %s)" % version)
+    if version == 2014:
+        _check_hwmpath()
     _mod, _batch, _dd = _HWM[version]
 
     dts = _t2dt(time); n = dts.size

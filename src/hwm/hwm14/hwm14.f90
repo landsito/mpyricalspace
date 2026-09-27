@@ -1429,7 +1429,7 @@ subroutine findandopen(datafile,unitid)
 
     character(128)      :: datafile
     integer             :: unitid
-    character(128)      :: hwmpath
+    character(1024)     :: hwmpath
     logical             :: havefile
     integer             :: i
 

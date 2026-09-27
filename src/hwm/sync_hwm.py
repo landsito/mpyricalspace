@@ -17,10 +17,11 @@ web.archive.org, byte-identical between hwm14 and hwm07's copies of the
 same DWM07B/apex-grid files) are the only source and always kept as-is.
 
 POST_PATCHES: compile/runtime fixes applied to a file right after
-downloading it, so they survive the next resync. Empty for now -- both
-hwm14.f90 and hwm07.01d.f90, as currently served by NRL, compile and run
-unmodified against this package's own f2py wrapper (hwm14_batch.f90 /
-hwm07_batch.f90).
+downloading it, so they survive the next resync. hwm14.f90's findandopen
+reads $HWMPATH into a character(128): a longer path (a deep virtualenv, a
+long home directory) is silently truncated, the .bin is "not found" and the
+Fortran STOPs the whole Python process. It is widened to character(1024).
+hwm07.01d.f90 compiles and runs unmodified.
 """
 import json
 import os
@@ -49,7 +50,11 @@ VERSIONS = {
 
 # (version, filename) -> [(old substring, new substring), ...], applied in
 # order, right after that file is freshly downloaded. See module docstring.
-POST_PATCHES = {}
+POST_PATCHES = {
+    ("hwm14", "hwm14.f90"): [
+        ("    character(128)      :: hwmpath", "    character(1024)     :: hwmpath"),
+    ],
+}
 
 
 def _apply_post_patches(vdir, fn, text, out):
