@@ -953,13 +953,33 @@ def _rteef(d0, dn, lon=-77., ief=None, nativelypackaged_indices=False):
 
 
 def _manoj_web(d0, dn, lon=-77.):
-    'call the Manoj & Maus PPEF web model -> (datetime, qef, tef, ppef) array'
+    '''call the Manoj & Maus PPEF web model -> (datetime, qef, tef, ppef) array
+       The service intermittently answers 503 (upstream connection reset), so transient
+       failures (5xx, 429, connection errors, timeouts) are retried up to 3 attempts in total.'''
     import re
+    import time
     import requests
     ndays = max((dn.date() - d0.date()).days, 1)
     p = {'year': '%04i' % d0.year, 'month': '%02i' % d0.month, 'day': '%02i' % d0.day,
          'utc': '%02i' % d0.hour, 'nDays': str(ndays), 'long': str(int(lon)), 'sat': 'auto', 'download': 'false'}
-    txt = requests.get(_MANOJ_URL, params=p, timeout=120).text
+    attempts, last = 3, None
+    for i in range(attempts):
+        try:
+            r = requests.get(_MANOJ_URL, params=p, timeout=120)
+        except (requests.ConnectionError, requests.Timeout) as e:
+            last = '%s: %s' % (type(e).__name__, e)
+        else:
+            if r.status_code == 200:
+                break
+            if r.status_code != 429 and r.status_code < 500:
+                r.raise_for_status()                          # 4xx: a real error, don't retry
+            last = 'HTTP %d: %s' % (r.status_code, r.text[:200])
+        if i < attempts - 1:
+            time.sleep(2 * 2**i)                              # 2 s, 4 s
+    else:
+        raise RuntimeError("the Manoj PPEF service failed after %d attempts for %s..%s (%s)"
+                           % (attempts, d0, dn, last))
+    txt = r.text
     rows = re.findall(r'\[\s*new Date\s*\((.*?)\)\s*,\s*([\d.+\-eE]+)\s*,\s*([\d.+\-eE]+)\s*,\s*([\d.+\-eE]+)\s*\]', txt)
     out = []
     for expr, ppef, qef, tef in rows:                         # site column order: prompt, quiet, total (mV/m)
