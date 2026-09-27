@@ -273,7 +273,7 @@ def rocsat_drift(time, lon=None, f107s=None, doys=None, slts=None):
     grid = {"f107": np.atleast_1d(gk['f107']), "lon": np.atleast_1d(lon),
             "doy": np.atleast_1d(doys) if doys is not None else None}
     grid = {k: v for k, v in grid.items() if v is not None and k in keys[:len(shape)]}
-    return pack(vals, time, keys, shape, grid).squeeze()
+    return pack(vals, time, keys, shape, grid).set_coords('slt').squeeze()   # slt: an input, not an output
 
 
 # ===========================================================================
@@ -532,11 +532,12 @@ def hltwim(time, lat, lon, kp=None, ut=None, doy=None):
             {k: (('points',), np.asarray(v, float)) for k, v in vals.items()},
             coords={'points': np.arange(ns), 'lat': ('points', col('lat')[:, 0]),
                     'lon': ('points', col('lon')[:, 0]),
-                    'time': np.atleast_1d(np.asarray(time, dtype='datetime64[s]'))[0]})
+                    'time': np.atleast_1d(np.asarray(time, dtype='datetime64[s]'))[0]}
+        ).set_coords(['mlat', 'mlt'])                             # mlat, mlt locate the sample: coords
 
     grid = {"kp": np.atleast_1d(kp), "lon": np.atleast_1d(lon), "lat": np.atleast_1d(lat),
             'time': np.atleast_1d(time)}
-    return pack(vals, time, keys, shape, grid).squeeze()
+    return pack(vals, time, keys, shape, grid).set_coords(['mlat', 'mlt']).squeeze()
 
 
 # ===========================================================================
@@ -651,8 +652,12 @@ def msis(time, lat, lon, alt, f107s=None, ap=None, nativelypackaged_indices=Fals
     if not rho_m3:
         d[:, :, :, :, :10] = d[:, :, :, :, :10] * 1e-6
     dims = ('time', 'lon', 'lat', 'alt')
-    coords = {"ap": np.atleast_1d(ap), "lon": np.atleast_1d(lon), "lat": np.atleast_1d(lat),
+    ap_c = np.asarray(ap, float).reshape(-1)                 # an input: a (time) coord, or a scalar
+    ap_c = ('time', ap_c) if ap_c.size == dts.size else ap_c[0] if ap_c.size == 1 else None
+    coords = {"ap": ap_c, "lon": np.atleast_1d(lon), "lat": np.atleast_1d(lat),
               "alt": np.atleast_1d(alt), 'time': np.atleast_1d(dts)}
+    if ap_c is None:                                         # an (n, 7) ap history: no single ap per time
+        del coords["ap"]
     return xr.Dataset({n: (dims, d[:, :, :, :, i]) for i, n in enumerate(names)}, coords=coords).squeeze()
 
 
@@ -1140,7 +1145,7 @@ def weimer05(time, mlat, mlt, by=None, bz=None, vsw=None, nsw=None, tilt=None, r
     t64 = np.array(dts, dtype='datetime64[s]')
     ds = pack({'epot': epot, 'fac': fac}, t64, ['time', 'mlat', 'mlt'], shape,
               {'time': t64, 'mlat': la, 'mlt': mt})
-    ds = ds.assign({k: ('time', v) for k, v in drv.items()})
+    ds = ds.assign_coords({k: ('time', v) for k, v in drv.items()})          # the drivers: inputs, as coords
     ds['epot'].attrs.update(units='kV', long_name='electric potential')
     ds['fac'].attrs.update(units='uA/m^2', long_name='field-aligned current density at 110 km',
                            positive='downward (into the ionosphere)')
