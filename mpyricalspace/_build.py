@@ -10,7 +10,7 @@ from its cause. ``build_info()`` probes each one in isolation.
     >>> mpyricalspace.build_info()                 # {ext: None if OK else "<error>"}
     >>> print(mpyricalspace.build_report())        # a table
     $ python -m mpyricalspace doctor               # the same table
-    $ python -m mpyricalspace doctor --json        # machine-readable (the VS Code helper reads this)
+    $ python -m mpyricalspace doctor --json        # machine-readable (manual diagnostic; may rebuild editable installs)
 '''
 import json
 import importlib

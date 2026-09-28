@@ -14,6 +14,7 @@ py3.install_sources([
 
 # companion VS Code extension source (built into a .vsix on demand by _vscode.py)
 install_data(
-  ['vscode_ext/package.json', 'vscode_ext/extension.js', 'vscode_ext/README.md'],
+  ['vscode_ext/package.json', 'vscode_ext/extension.js', 'vscode_ext/observer.js',
+   'vscode_ext/probe.py', 'vscode_ext/modules.json', 'vscode_ext/README.md'],
   install_dir: py3.get_install_dir() / 'mpyricalspace' / 'vscode_ext',
 )
