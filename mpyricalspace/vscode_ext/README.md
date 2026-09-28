@@ -65,20 +65,33 @@ use an interpreter with the needed dependencies in its standard package director
 From the repository root, using the desired Python executable:
 
 ```bash
-mkdir -p tools/vscode-mpyricalspace
-python -I -S -B mpyricalspace/_vscode.py build tools/vscode-mpyricalspace
-code --install-extension tools/vscode-mpyricalspace/mpyricalspace-build-status-0.2.0.vsix --force
+python -I -S -B mpyricalspace/_vscode.py build
+code --install-extension ./mpyricalspace-build-status-0.2.0.vsix --force
 ```
+
+The build command writes the VSIX to the current directory. Optionally pass an
+existing output directory after `build`. After installation, the VSIX can be
+deleted; VS Code keeps its own installed copy.
 
 Alternatively use **Extensions → … → Install from VSIX…**. Reload VS Code after
 updating. If the extension was disabled, enable it explicitly when ready to test.
 Disabling or uninstalling it does not change the Python package or build files.
 
-The package's older `python -m mpyricalspace vscode ...` commands and one-time
-installation hook still exist for compatibility. Unlike the direct build command
-above, those package entry points can trigger an editable rebuild. The observer
-never calls them. Set `MPYRICALSPACE_NO_VSCODE=1` to opt out of the package's legacy
-auto-install attempt. Uninstall with:
+If the Python package is installed, these CLI commands are also available:
+
+```bash
+python -m mpyricalspace vscode              # build in a temporary directory and install
+python -m mpyricalspace vscode build        # build the VSIX in the current directory
+python -m mpyricalspace vscode status       # show installation status and log location
+```
+
+The first command cleans up its temporary build directory automatically. The
+`build` command optionally accepts an existing output directory. These package
+entry points remain supported for compatibility, but can trigger an editable
+rebuild; use the direct script above to avoid importing the library. The observer
+never calls them. The legacy automatic installation attempt runs only in a VS Code
+environment with an available editor CLI. Set `MPYRICALSPACE_NO_VSCODE=1` to opt
+out of that automatic attempt. Uninstall with:
 
 ```bash
 code --uninstall-extension mpyricalspace.mpyricalspace-build-status

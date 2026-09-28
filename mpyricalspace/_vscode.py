@@ -1,28 +1,30 @@
 '''
 Companion VS Code extension -- build & install helper.
 
-The extension (mpyricalspace/vscode_ext/) tints each ``src/<model>/`` folder in
-the Explorer green / red by whether its compiled Fortran extension loads.  It is
-entirely optional and editor-only. Its standalone observer loads existing native
-files without importing this package or invoking the build system. To package it
-without entering the editable loader, run this file directly:
+The optional observer checks existing compiled wrappers without importing this
+package or invoking its build system. From the development repository root,
+build and install manually without entering the editable loader:
 
-    python -I -S -B mpyricalspace/_vscode.py build DIR
+    python -I -S -B mpyricalspace/_vscode.py build
+    code --install-extension ./mpyricalspace-build-status-0.2.0.vsix --force
 
-Python wheels have no post-install hook, so installation is *attempted*, once,
-best-effort:
+The VSIX is written to the current directory; an existing output directory may
+be passed after ``build``. The VSIX can be deleted after installation.
 
-* on the first ``python -m mpyricalspace ...`` command, and
-* on the first ``import mpyricalspace`` from inside a VS Code terminal.
+With the Python package installed, these compatibility commands also work, but
+may trigger an editable rebuild because they enter the package:
 
-Every failure is swallowed and appended to ``~/.cache/mpyricalspace/vscode-ext.log``;
-a sentinel (``vscode-ext.tried``) stops it retrying.  Run it by hand any time:
+    python -m mpyricalspace vscode              # build in a temporary directory and install
+    python -m mpyricalspace vscode build [DIR]  # build only; defaults to current directory
+    python -m mpyricalspace vscode status       # installation status and log location
 
-    python -m mpyricalspace vscode              # build the .vsix + code --install-extension
-    python -m mpyricalspace vscode build [DIR]  # just build the .vsix
-    python -m mpyricalspace vscode status       # installed? was it tried?
+The legacy first-run installation hook is best-effort and requires a VS Code
+environment and an available editor CLI. A ``vscode-ext.tried`` sentinel prevents
+retries; installation logs go to ``vscode-ext.log`` in ``MPYRICALSPACE_DATA_DIR``
+(default: ``~/.cache/mpyricalspace``). Set ``MPYRICALSPACE_NO_VSCODE=1`` to disable
+automatic installation; explicit manual commands remain available.
 
-Opt out completely with  MPYRICALSPACE_NO_VSCODE=1.
+See ``vscode_ext/README.md`` for the full installation and usage reference.
 '''
 import os
 import sys
