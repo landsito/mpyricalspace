@@ -1,60 +1,111 @@
 # mpyricalspace build status (VS Code)
 
-An **optional** editor nicety bundled with the `mpyricalspace` package. It runs
+An optional observer for compiled wrappers. Version **0.2.0** replaces the old
+`doctor` subprocess with a standalone, per-file load check. It never imports
+`mpyricalspace`, invokes a build, installs dependencies, or repairs the package.
 
-```
-python -m mpyricalspace doctor --json
-```
-
-and, in the Explorer, tints each `src/<model>/` folder:
-
-| | |
+| Explorer indicator | Meaning |
 |---|---|
-| green + `✓` | the model's compiled Fortran extension is built and imports |
-| red + `✗`   | it is missing / fails to import (tooltip shows the error) |
+| Green ✓ | The selected Python interpreter loaded this compiled file successfully. |
+| Red ✗ | Loading failed, the probe exited unexpectedly, or it timed out. Hover for the error. |
+| No check | Missing, ambiguous, pending, or not yet verified. Hover for details. |
 
-A model can live nested more than one level under `src/` (e.g. `src/iri/iri12/`)
--- the exact path just needs to match `doctor --json`'s own `subdir` for that
-extension. Any folder that isn't itself a model (e.g. `src/iri/`, which several
-IRI versions live under) gets a rolled-up `n/m` summary instead of no color at
-all, tallied from every model folder underneath it.
+These checks do not run model functions or validate scientific results. A check
+also does not prove that an artifact is up to date with its source. It describes
+the existing file that was loaded. Ancestor folders show an aggregate count;
+the status bar shows the number of wrappers that loaded.
 
-A status-bar item (bottom-left) shows the overall `n/m` count; click it to
-refresh. It also refreshes when a `.so` changes or a build task ends.
+## How it works
 
-100% editor-only: it writes nothing, touches neither the package nor the build,
-and if `mpyricalspace` is not installed it just shows "not installed" and
-decorates nothing.
+1. Read a bundled module-to-source-folder registry and existing Meson install
+   plans, or locate an installed package directory without importing it.
+2. Start a fresh Python process for **one artifact**, loading it by absolute path.
+3. Report the result and exit. There is only one active probe per extension
+   instance; repeated events are grouped into a pending check.
 
-## Install
+Python runs with `-I -S -B`: no `PYTHONPATH`, startup customization, `.pth` files,
+editable import hooks, or bytecode writes. The helper adds dependency directories
+without executing their startup hooks, blocks imports of `mpyricalspace`, and
+rejects Python subprocess-launch requests. Native code is still executed when a
+wrapper loads: process isolation is not an OS sandbox or a promise of zero CPU,
+memory, or native-code side effects. Native crashes stay in the probe process.
 
-It is **attempted automatically, once**, the first time you run
-`python -m mpyricalspace ...` or `import mpyricalspace` from a VS Code terminal
-(wheels have no post-install hook). Failures are logged to
-`~/.cache/mpyricalspace/vscode-ext.log` and never surface.
+Only changed artifacts are rechecked. Their old check is invalidated immediately;
+a result is discarded if the file changes during verification. New artifacts or
+changed install plans trigger rediscovery. Manual refresh and interpreter/settings
+changes recheck the selection. There is no polling, automatic repair, or refresh
+on unrelated task completion. A timeout terminates the probe; on POSIX the entire
+probe process group is terminated. Deactivation cancels timers and queued work
+and terminates the active probe.
 
-Do it (or redo it) by hand:
+The extension targets the first workspace folder containing both
+`mpyricalspace/_build.py` and `src/meson.build`. It decorates that source tree even
+when checking a normal installed package. It requires a trusted workspace.
+
+## Artifact discovery and settings
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `mpyricalspace.pythonPath` | `""` | Python executable. Empty uses the Python extension's selected environment, falling back to `python3`. |
+| `mpyricalspace.buildDirectory` | `""` | Existing Meson build directory, e.g. `build/cp312`; relative to the source root or absolute. |
+| `mpyricalspace.packageDirectory` | `""` | Directory containing installed wrappers; overrides build discovery. Useful for custom installation layouts. |
+| `mpyricalspace.probeTimeout` | `15` | Maximum seconds per probe (1–120). |
+| `mpyricalspace.decorateBadges` | `true` | Show ✓/✗ badges as well as folder colors. |
+
+By default, compatible artifacts in `build/**/meson-info/intro-install_plan.json`
+are preferred. If none are mapped, the selected interpreter's standard package
+directories are searched. Multiple candidates remain unverified: select a build
+or package directory explicitly. Incompatible filename tags are ignored. A missing
+artifact in a selected build does not silently fall back to an older installed copy.
+Custom dependency paths supplied only by `.pth` files are deliberately not executed;
+use an interpreter with the needed dependencies in its standard package directories.
+
+## Build and install without importing the library
+
+From the repository root, using the desired Python executable:
 
 ```bash
-python -m mpyricalspace vscode            # build the .vsix + code --install-extension
-python -m mpyricalspace vscode status     # installed?  was it tried?
-python -m mpyricalspace vscode build DIR  # just write the .vsix into DIR
+mkdir -p tools/vscode-mpyricalspace
+python -I -S -B mpyricalspace/_vscode.py build tools/vscode-mpyricalspace
+code --install-extension tools/vscode-mpyricalspace/mpyricalspace-build-status-0.2.0.vsix --force
 ```
 
-**Fully quit VS Code (Cmd/Ctrl+Q) and reopen** after the first install -- a window
-reload is not always enough. If the `code` CLI is missing, VS Code ->
-Cmd/Ctrl+Shift+P -> "Shell Command: Install 'code' command in PATH".
+Alternatively use **Extensions → … → Install from VSIX…**. Reload VS Code after
+updating. If the extension was disabled, enable it explicitly when ready to test.
+Disabling or uninstalling it does not change the Python package or build files.
 
-Opt out of the auto-attempt entirely with `MPYRICALSPACE_NO_VSCODE=1`.
-Uninstall: `code --uninstall-extension mpyricalspace.mpyricalspace-build-status`.
+The package's older `python -m mpyricalspace vscode ...` commands and one-time
+installation hook still exist for compatibility. Unlike the direct build command
+above, those package entry points can trigger an editable rebuild. The observer
+never calls them. Set `MPYRICALSPACE_NO_VSCODE=1` to opt out of the package's legacy
+auto-install attempt. Uninstall with:
 
-## Settings
+```bash
+code --uninstall-extension mpyricalspace.mpyricalspace-build-status
+```
 
-| setting | default | meaning |
-|---|---|---|
-| `mpyricalspace.pythonPath` | `""` | interpreter for `doctor`; empty = the Python extension's selected interpreter, else `python3` |
-| `mpyricalspace.decorateBadges` | `true` | show the `✓`/`✗` badge (colour is applied either way) |
+## Development and validation
 
-## Hack on it
+`modules.json` maps wrapper names to folders, matching `_build.py`'s registry;
+update both when adding a wrapper. `probe.py` is standalone and ships inside the
+VSIX. `observer.js` handles serialization, cancellation, and stale results;
+`extension.js` handles VS Code events and decorations.
 
-Open this folder in VS Code and press **F5** (Extension Development Host).
+Run from the repository root, without importing the package:
+
+```bash
+python -I -S -B tests/vscode/test_probe.py
+node --test tests/vscode/observer.test.js tests/vscode/extension.test.js
+```
+
+Set `MPY_TEST_PYTHON` to a Python executable for the Node process tests; it defaults
+to `python3`. The optional acceptance check below loads real local artifacts and
+verifies that build-file sizes and modification times remain unchanged. It does
+not compile missing wrappers and fails if any wrapper cannot load:
+
+```bash
+python -I -S -B tests/vscode/live_check.py
+```
+
+When checking editable isolation, do not use `python -m mpyricalspace doctor`:
+that is a separate manual package diagnostic and may trigger a build.

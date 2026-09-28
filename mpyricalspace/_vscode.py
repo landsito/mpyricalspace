@@ -3,7 +3,11 @@ Companion VS Code extension -- build & install helper.
 
 The extension (mpyricalspace/vscode_ext/) tints each ``src/<model>/`` folder in
 the Explorer green / red by whether its compiled Fortran extension loads.  It is
-entirely optional and editor-only.
+entirely optional and editor-only. Its standalone observer loads existing native
+files without importing this package or invoking the build system. To package it
+without entering the editable loader, run this file directly:
+
+    python -I -S -B mpyricalspace/_vscode.py build DIR
 
 Python wheels have no post-install hook, so installation is *attempted*, once,
 best-effort:
@@ -97,6 +101,7 @@ def build_vsix(dest_dir):
         '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n'
         '  <Default Extension=".json" ContentType="application/json" />\n'
         '  <Default Extension=".js" ContentType="application/javascript" />\n'
+        '  <Default Extension=".py" ContentType="text/plain" />\n'
         '  <Default Extension=".md" ContentType="text/markdown" />\n'
         '  <Default Extension=".vsixmanifest" ContentType="text/xml" />\n'
         '</Types>\n'
@@ -104,7 +109,7 @@ def build_vsix(dest_dir):
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("extension.vsixmanifest", manifest)
         z.writestr("[Content_Types].xml", content_types)
-        for f in ("package.json", "extension.js", "README.md"):
+        for f in ("package.json", "extension.js", "observer.js", "probe.py", "modules.json", "README.md"):
             z.write(os.path.join(_SRC, f), "extension/" + f)
     return out
 
@@ -206,3 +211,13 @@ def _now_from(path):
             return fh.read().strip()
     except OSError:
         return None
+
+
+if __name__ == "__main__":
+    # Direct invocation avoids package initialization and editable rebuild hooks.
+    import argparse
+    parser = argparse.ArgumentParser(description="Build the optional VS Code extension without importing mpyricalspace.")
+    parser.add_argument("action", choices=["build"])
+    parser.add_argument("out", nargs="?", default=".")
+    args = parser.parse_args()
+    print(build_vsix(args.out))

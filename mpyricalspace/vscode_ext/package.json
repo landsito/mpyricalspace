@@ -1,14 +1,23 @@
 {
   "name": "mpyricalspace-build-status",
   "displayName": "mpyricalspace build status",
-  "description": "Colours src/<model>/ folders in the Explorer by whether their compiled Fortran extension loads (python -m mpyricalspace doctor).",
-  "version": "0.1.2",
+  "description": "Shows whether individual compiled wrappers load, without importing mpyricalspace or starting builds.",
+  "version": "0.2.0",
   "publisher": "mpyricalspace",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/landsito/mpyricalspace" },
-  "engines": { "vscode": "^1.75.0" },
-  "categories": ["Other"],
-  "activationEvents": ["workspaceContains:src/meson.build"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/landsito/mpyricalspace"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "workspaceContains:src/meson.build"
+  ],
   "main": "./extension.js",
   "contributes": {
     "commands": [
@@ -23,14 +32,37 @@
         "mpyricalspace.pythonPath": {
           "type": "string",
           "default": "",
-          "description": "Interpreter used for 'python -m mpyricalspace doctor'. Empty = the Python extension's selected interpreter, falling back to 'python3'."
+          "description": "Python executable for isolated wrapper checks. Empty uses the Python extension selection, falling back to python3."
         },
         "mpyricalspace.decorateBadges": {
           "type": "boolean",
           "default": true,
           "description": "Show a check / cross badge on the folder (the colour is applied regardless)."
+        },
+        "mpyricalspace.buildDirectory": {
+          "type": "string",
+          "default": "",
+          "description": "Existing Meson build directory, absolute or relative to the source workspace. Select explicitly if several builds exist."
+        },
+        "mpyricalspace.packageDirectory": {
+          "type": "string",
+          "default": "",
+          "description": "Directory containing installed wrapper files. Overrides Meson discovery; useful for nonstandard installations."
+        },
+        "mpyricalspace.probeTimeout": {
+          "type": "number",
+          "default": 15,
+          "minimum": 1,
+          "maximum": 120,
+          "description": "Maximum seconds per isolated probe. A timeout never triggers a build or repair."
         }
       }
+    }
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Loading native wrappers requires a trusted workspace."
     }
   }
 }

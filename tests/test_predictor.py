@@ -213,6 +213,8 @@ def test_vscode_ext_vsix_builds(tmp_path):
         names = z.namelist()
     assert "extension.vsixmanifest" in names and "[Content_Types].xml" in names
     assert "extension/package.json" in names and "extension/extension.js" in names
+    assert "extension/probe.py" in names and "extension/observer.js" in names
+    assert "extension/modules.json" in names
 
 
 def test_hltwim_reference_row():

@@ -1,191 +1,154 @@
-/*
- * mpyricalspace build status -- an optional VS Code nicety.
- *
- * Runs `python -m mpyricalspace doctor --json` and, in the Explorer, tints each
- * src/<model>/ folder green (extension compiled and loads) or red (missing /
- * import error), with a matching badge and tooltip -- and any ancestor folder that
- * isn't itself a model (e.g. src/iri/, which several IRI versions live under) gets
- * a rolled-up n/m summary instead, so nothing under src/ is ever left uncolored.
- * A status-bar item shows the overall n/m count.  Everything here is editor-only:
- * nothing is written, and if
- * mpyricalspace is not installed the extension simply shows "not installed" and
- * decorates nothing.
- */
+// Observe existing native artifacts. Never import the package or start a build.
 const vscode = require('vscode');
-const cp = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const util = require('util');
-
-const execFile = util.promisify(cp.execFile);
-
+const { ProbeRunner, Observer } = require('./observer');
+const registry = require('./modules.json');
 let provider;
-let statusBar;
 
-function pythonInterpreter() {
-  const configured = vscode.workspace.getConfiguration('mpyricalspace').get('pythonPath');
+function projectRoot() {
+  return (vscode.workspace.workspaceFolders || []).map(f => f.uri.fsPath)
+    .find(p => fs.existsSync(path.join(p, 'mpyricalspace', '_build.py')) && fs.existsSync(path.join(p, 'src', 'meson.build')));
+}
+
+async function pythonInterpreter(root, subscribe) {
+  const configured = vscode.workspace.getConfiguration('mpyricalspace', vscode.Uri.file(root)).get('pythonPath');
   if (configured) return configured;
-  try {
-    const py = vscode.extensions.getExtension('ms-python.python');
-    const details = py && py.isActive && py.exports && py.exports.settings
-      && py.exports.settings.getExecutionDetails
-      ? py.exports.settings.getExecutionDetails()
-      : null;
-    if (details && Array.isArray(details.execCommand) && details.execCommand.length) {
-      return details.execCommand[0];
+  const extension = vscode.extensions.getExtension('ms-python.python');
+  if (extension) {
+    const api = extension.isActive ? extension.exports : await extension.activate();
+    if (api.environments && api.environments.onDidChangeActiveEnvironmentPath) subscribe(api.environments);
+    const resource = vscode.Uri.file(root);
+    const selected = api.environments && api.environments.getActiveEnvironmentPath(resource);
+    if (selected) {
+      const environment = await api.environments.resolveEnvironment(selected);
+      if (environment && environment.executable && environment.executable.uri) return environment.executable.uri.fsPath;
     }
-  } catch (_e) { /* fall through */ }
+    const details = api.settings && api.settings.getExecutionDetails(resource);
+    if (details && details.execCommand && details.execCommand.length) return details.execCommand[0];
+  }
   return 'python3';
 }
 
-function projectRoot() {
-  return (vscode.workspace.workspaceFolders || [])
-    .map((f) => f.uri.fsPath)
-    .find((p) => fs.existsSync(path.join(p, 'src', 'meson.build'))) || null;
-}
-
 class BuildStatusProvider {
-  constructor() {
-    this._emitter = new vscode.EventEmitter();
-    this.onDidChangeFileDecorations = this._emitter.event;
-    this.root = null;
-    this.bySubdir = {};      // "hltwim" -> { ok, error, label, ext }
-    this.byPrefix = {};      // "iri" -> { ok, total } -- rollup for ancestor folders, see _rollup()
-    this.summary = null;     // { ok, total } | { note }
-    this._timer = null;
+  constructor(context) {
+    this.context = context; this.root = projectRoot(); this.modules = {}; this.watchers = [];
+    this.observer = null; this.disposed = false; this.restartId = 0; this.restarts = Promise.resolve();
+    this.emitter = new vscode.EventEmitter(); this.onDidChangeFileDecorations = this.emitter.event;
+    this.status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 5);
+    this.status.command = 'mpyricalspace.refreshBuildStatus';
   }
-
-  scheduleRefresh() {
-    if (this._timer) clearTimeout(this._timer);
-    this._timer = setTimeout(() => this.refresh(), 400);   // debounce a build touching many .so
-  }
-
-  async refresh() {
-    this.root = projectRoot();
-    if (!this.root) { this._apply({}, { note: 'no src/meson.build in the workspace' }); return; }
-
-    const py = pythonInterpreter();
-    try {
-      const { stdout } = await execFile(py, ['-m', 'mpyricalspace', 'doctor', '--json'],
-        { cwd: this.root, timeout: 30000, maxBuffer: 4 * 1024 * 1024 });
-      const data = JSON.parse(stdout);
-      const bySubdir = {};
-      for (const [ext, info] of Object.entries(data.extensions || {})) {
-        bySubdir[info.subdir] = { ok: info.ok, error: info.error, label: info.label, ext };
+  restart() {
+    const id = ++this.restartId;
+    // Serialize replacement as well as probes: the previous process must close first.
+    this.restarts = this.restarts.then(async () => {
+      if (this.disposed || id !== this.restartId) return;
+      if (this.observer) {
+        const child = this.observer.runner.child;
+        const closed = child ? new Promise(resolve => child.once('close', resolve)) : Promise.resolve();
+        this.observer.dispose(); this.observer = null;
+        await closed;
       }
-      this._apply(bySubdir, { ok: data.ok, total: data.total });
-    } catch (e) {
-      const msg = /No module named mpyricalspace/i.test(String(e && e.stderr))
-        ? 'mpyricalspace is not installed in ' + py
-        : String((e && e.message) || e).split('\n')[0];
-      this._apply({}, { note: msg });
-    }
+      this.clearWatchers(); this.modules = {}; this.root = projectRoot();
+      this.update({}, 'Selecting Python interpreter.');
+      if (!this.root) { this.update({}, 'No mpyricalspace source project in this workspace.'); return; }
+      try {
+        const python = await pythonInterpreter(this.root, environments => {
+          if (!this.pythonEvents && !this.disposed) this.pythonEvents = environments.onDidChangeActiveEnvironmentPath(() => this.restart());
+        });
+        if (this.disposed || id !== this.restartId) return;
+        const config = vscode.workspace.getConfiguration('mpyricalspace', vscode.Uri.file(this.root));
+        const args = ['--root', this.root];
+        for (const [key, flag] of [['buildDirectory', '--build-dir'], ['packageDirectory', '--package-dir']]) {
+          const value = config.get(key);
+          if (value) args.push(flag, path.resolve(this.root, value));
+        }
+        const runner = new ProbeRunner(python, path.join(__dirname, 'probe.py'), config.get('probeTimeout') * 1000);
+        this.observer = new Observer(runner, args, (modules, note) => this.update(modules, note), modules => this.watch(modules));
+        this.watch({}); this.observer.refresh();
+      } catch (error) { this.update({}, error.message); }
+    });
+    return this.restarts;
   }
-
-  // Every ancestor prefix of a leaf subdir (e.g. "iri" for "iri/iri12") gets its own
-  // ok/total tally across every leaf under it, so a container folder (nothing itself
-  // builds into an extension, e.g. src/iri/) still gets a summary decoration without
-  // needing to expand it -- same idea as VS Code's own Git decorations propagating a
-  // changed file's color up to its parent folders.
-  _rollup(bySubdir) {
-    const byPrefix = {};
-    for (const [subdir, info] of Object.entries(bySubdir)) {
-      const parts = subdir.split('/');
-      for (let i = 1; i < parts.length; i++) {
-        const prefix = parts.slice(0, i).join('/');
-        const agg = byPrefix[prefix] || (byPrefix[prefix] = { ok: 0, total: 0 });
-        agg.total += 1;
-        if (info.ok) agg.ok += 1;
+  refresh() { if (this.observer) this.observer.refresh(); else this.restart(); }
+  clearWatchers() { this.watchers.forEach(w => w.dispose()); this.watchers = []; }
+  watch(modules) {
+    this.clearWatchers();
+    const directories = new Set(Object.values(modules).filter(m => m.path).map(m => path.dirname(m.path)));
+    // Watch the project for new artifacts/install plans, including previously missing modules.
+    const patterns = [new vscode.RelativePattern(this.root, '**/*.{so,pyd}'),
+      new vscode.RelativePattern(this.root, '**/meson-info/intro-install_plan.json')];
+    const config = vscode.workspace.getConfiguration('mpyricalspace', vscode.Uri.file(this.root));
+    for (const key of ['buildDirectory', 'packageDirectory']) {
+      const value = config.get(key);
+      if (value) {
+        const base = path.resolve(this.root, value);
+        patterns.push(new vscode.RelativePattern(base, '**/*.{so,pyd}'));
+        if (key === 'buildDirectory') patterns.push(new vscode.RelativePattern(base, 'meson-info/intro-install_plan.json'));
       }
     }
-    return byPrefix;
-  }
-
-  _apply(bySubdir, summary) {
-    this.bySubdir = bySubdir;
-    this.byPrefix = this._rollup(bySubdir);
-    this.summary = summary;
-    this._updateStatusBar();
-    this._emitter.fire(undefined);          // re-decorate everything
-  }
-
-  _updateStatusBar() {
-    if (!statusBar) return;
-    const s = this.summary || {};
-    if (s.note) {
-      statusBar.text = '$(circle-slash) mpyricalspace';
-      statusBar.tooltip = 'mpyricalspace build status: ' + s.note;
-    } else {
-      const bad = (s.total || 0) - (s.ok || 0);
-      statusBar.text = `${bad ? '$(error)' : '$(check)'} mpyricalspace ${s.ok}/${s.total}`;
-      statusBar.tooltip = bad
-        ? `${bad} compiled extension(s) missing -- run  python -m mpyricalspace doctor`
-        : 'every compiled Fortran extension loads';
+    for (const dir of directories) {
+      const relative = path.relative(this.root, dir);
+      if (relative.startsWith('..') || path.isAbsolute(relative)) patterns.push(new vscode.RelativePattern(dir, '*.{so,pyd}'));
     }
-    statusBar.command = 'mpyricalspace.refreshBuildStatus';
-    statusBar.show();
+    for (const pattern of patterns) {
+      const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+      const changed = uri => {
+        if (!this.observer) return;
+        const filename = uri.fsPath;
+        if (path.basename(filename) === 'intro-install_plan.json') { this.observer.refresh(); return; }
+        if (filename.endsWith('.json')) return;
+        if (Object.values(this.modules).some(m => m.path === filename)) this.observer.changed(filename);
+        else {
+          const name = path.basename(filename).split('.')[0];
+          if (registry[name]) this.observer.refresh();
+        }
+      };
+      watcher.onDidCreate(changed); watcher.onDidChange(changed); watcher.onDidDelete(changed);
+      this.watchers.push(watcher);
+    }
   }
-
+  update(modules, note) {
+    if (this.disposed) return;
+    this.modules = modules;
+    const values = Object.values(modules), ok = values.filter(m => m.state === 'ok').length;
+    this.status.text = `${note ? '$(circle-slash)' : '$(beaker)'} mpyricalspace ${ok}/${values.length}`;
+    this.status.tooltip = note || `${ok}/${values.length} existing wrappers loaded. Click to verify again; no build is started.`;
+    this.status.show(); this.emitter.fire(undefined);
+  }
   provideFileDecoration(uri) {
     if (!this.root) return undefined;
-    // subdir values from `doctor --json` are src/-relative and not always a direct
-    // child (e.g. the IRI versions live under src/iri/<version>/), so match on the
-    // relative path as-is rather than rejecting anything with a path separator.
-    const rel = path.relative(path.join(this.root, 'src'), uri.fsPath);
+    const rel = path.relative(path.join(this.root, 'src'), uri.fsPath).split(path.sep).join('/');
     if (!rel || rel.startsWith('..')) return undefined;
-
-    const badges = vscode.workspace.getConfiguration('mpyricalspace').get('decorateBadges');
-    const info = this.bySubdir[rel];
-    if (info) {
-      if (info.ok) {
-        return new vscode.FileDecoration(badges ? '✓' : undefined,
-          `${info.ext}  --  compiled, loads OK`,
-          new vscode.ThemeColor('gitDecoration.addedResourceForeground'));
-      }
-      return new vscode.FileDecoration(badges ? '✗' : undefined,
-        `${info.ext}  --  NOT built: ${info.error || 'missing'}`,
-        new vscode.ThemeColor('gitDecoration.deletedResourceForeground'));
-    }
-
-    // Not a leaf itself (e.g. src/iri/, nothing builds into "iri") -- roll up whatever
-    // leaves live under it instead, so it's not left with no indicator at all.
-    const agg = this.byPrefix[rel];
-    if (!agg) return undefined;
-    const bad = agg.total - agg.ok;
-    if (!bad) {
-      return new vscode.FileDecoration(badges ? '✓' : undefined,
-        `${agg.ok}/${agg.total} compiled, load OK`,
-        new vscode.ThemeColor('gitDecoration.addedResourceForeground'));
-    }
-    return new vscode.FileDecoration(badges ? '✗' : undefined,
-      `${bad}/${agg.total} NOT built`,
-      new vscode.ThemeColor('gitDecoration.deletedResourceForeground'));
+    const entries = Object.entries(this.modules).filter(([, m]) => m.subdir === rel || m.subdir.startsWith(rel + '/'));
+    if (!entries.length) return undefined;
+    const badges = vscode.workspace.getConfiguration('mpyricalspace', uri).get('decorateBadges');
+    const failed = entries.filter(([, m]) => m.state === 'failed');
+    const ok = entries.filter(([, m]) => m.state === 'ok').length;
+    const allOK = ok === entries.length;
+    const tooltip = entries.length === 1 ? `${entries[0][0]}: ${allOK ? 'Python loaded this compiled file.' : entries[0][1].error || 'Not verified.'}`
+      : `${ok}/${entries.length} wrappers loaded; ${failed.length} failed; ${entries.length - ok - failed.length} not verified.`;
+    return new vscode.FileDecoration(badges ? (failed.length ? '✗' : allOK ? '✓' : undefined) : undefined,
+      tooltip, failed.length ? new vscode.ThemeColor('gitDecoration.deletedResourceForeground')
+        : allOK ? new vscode.ThemeColor('gitDecoration.addedResourceForeground') : undefined);
+  }
+  dispose() {
+    this.disposed = true; this.restartId++;
+    if (this.observer) this.observer.dispose();
+    this.clearWatchers();
+    if (this.pythonEvents) this.pythonEvents.dispose();
+    this.status.dispose(); this.emitter.dispose();
   }
 }
 
 function activate(context) {
-  provider = new BuildStatusProvider();
-  statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 5);
-
-  context.subscriptions.push(
-    statusBar,
-    vscode.window.registerFileDecorationProvider(provider),
+  provider = new BuildStatusProvider(context);
+  context.subscriptions.push(provider, vscode.window.registerFileDecorationProvider(provider),
     vscode.commands.registerCommand('mpyricalspace.refreshBuildStatus', () => provider.refresh()),
-    vscode.tasks.onDidEndTask(() => provider.scheduleRefresh()),
-    vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('mpyricalspace')) provider.refresh();
-    })
-  );
-
-  const watcher = vscode.workspace.createFileSystemWatcher('**/*.{so,pyd}');
-  watcher.onDidCreate(() => provider.scheduleRefresh());
-  watcher.onDidDelete(() => provider.scheduleRefresh());
-  watcher.onDidChange(() => provider.scheduleRefresh());
-  context.subscriptions.push(watcher);
-
-  provider.refresh();
+    vscode.workspace.onDidChangeConfiguration(e => {
+      if (e.affectsConfiguration('mpyricalspace') || e.affectsConfiguration('python')) provider.restart();
+    }), vscode.workspace.onDidChangeWorkspaceFolders(() => provider.restart()));
+  provider.restart();
 }
-
-function deactivate() {}
-
+function deactivate() { if (provider) provider.dispose(); }
 module.exports = { activate, deactivate };

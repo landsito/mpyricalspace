@@ -1,0 +1,98 @@
+{
+  "rocsatf": {
+    "label": "ROCSAT-1 vertical drift (Fejer et al. 2008)",
+    "subdir": "rocsat"
+  },
+  "scherliessfejerf": {
+    "label": "Scherliess-Fejer vertical drift (quiet + storm)",
+    "subdir": "scherliessfejer"
+  },
+  "jvdm1": {
+    "label": "Alken JULIA vertical-drift model (2009)",
+    "subdir": "jvdm1"
+  },
+  "eejm1": {
+    "label": "Alken equatorial electrojet, v1",
+    "subdir": "eejm/eejm1"
+  },
+  "eejm2": {
+    "label": "Alken equatorial electrojet, v2",
+    "subdir": "eejm/eejm2"
+  },
+  "eefm1": {
+    "label": "Alken equatorial electric field",
+    "subdir": "eefm1"
+  },
+  "ppeefm1": {
+    "label": "Manoj & Maus prompt-penetration EEF (RTEEF)",
+    "subdir": "ppeefm1"
+  },
+  "hwm14f": {
+    "label": "Horizontal Wind Model 2014",
+    "subdir": "hwm/hwm14"
+  },
+  "hwm07f": {
+    "label": "Horizontal Wind Model 2007",
+    "subdir": "hwm/hwm07"
+  },
+  "hwm93f": {
+    "label": "Horizontal Wind Model 1993",
+    "subdir": "hwm/hwm93"
+  },
+  "hltwimf": {
+    "label": "HL-TWiM high-latitude wind (Dhadly et al. 2019)",
+    "subdir": "hltwim"
+  },
+  "weimer05f": {
+    "label": "Weimer (2005) high-latitude potential / FAC",
+    "subdir": "weimer05"
+  },
+  "igrf14f": {
+    "label": "IGRF-14 geomagnetic field",
+    "subdir": "igrf/igrf14"
+  },
+  "igrf13f": {
+    "label": "IGRF-13 geomagnetic field",
+    "subdir": "igrf/igrf13"
+  },
+  "igrf12f": {
+    "label": "IGRF-12 geomagnetic field",
+    "subdir": "igrf/igrf12"
+  },
+  "igrf11f": {
+    "label": "IGRF-11 geomagnetic field",
+    "subdir": "igrf/igrf11"
+  },
+  "igrf10f": {
+    "label": "IGRF-10 geomagnetic field",
+    "subdir": "igrf/igrf10"
+  },
+  "igrf09f": {
+    "label": "IGRF-9 geomagnetic field",
+    "subdir": "igrf/igrf09"
+  },
+  "iri26f": {
+    "label": "IRI-2026 ionosphere",
+    "subdir": "iri/iri26"
+  },
+  "iri20f": {
+    "label": "IRI-2020 ionosphere",
+    "subdir": "iri/iri20"
+  },
+  "iri16f": {
+    "label": "IRI-2016 ionosphere",
+    "subdir": "iri/iri16"
+  },
+  "iri12f": {
+    "label": "IRI-2012 ionosphere",
+    "subdir": "iri/iri12"
+  },
+  "iri07f": {
+    "label": "IRI-2007 ionosphere",
+    "subdir": "iri/iri07"
+  },
+  "iri01f": {
+    "label": "IRI-2001 ionosphere",
+    "subdir": "iri/iri01"
+  }
+}
