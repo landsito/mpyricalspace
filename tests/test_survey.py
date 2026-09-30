@@ -17,9 +17,10 @@ def _orbit(n=40, alt_km=400.0, year=2004):
 
 def test_model_domains():
     d = survey.model_domains()
-    assert {"igrf", "msis", "hwm", "iri", "hltwim", "weimer05", "sf", "rocsat", "eej", "eef", "manoj"} == set(d)
+    assert {"igrf", "msis", "hwm", "iri", "hltwim", "weimer05", "heelis82", "sf", "rocsat", "eej", "eef", "manoj"} == set(d)
     assert d["iri"]["kind"] == "global" and d["eej"]["kind"] == "equator"
     assert d["weimer05"]["kind"] == "high_lat" and d["weimer05"]["altitude_km"] == (0.0, 2000.0)
+    assert d["heelis82"]["kind"] == "high_lat" and d["heelis82"]["altitude_km"] == (0.0, 2000.0)
     assert d["sf"]["maglat_deg"] == 2.5 and d["eej"]["altitude_km"] == (90.0, 130.0)
 
 
@@ -153,3 +154,75 @@ def test_weimer05_without_aacgmv2_is_skipped_with_a_message(monkeypatch):
     ds = survey.run_track(times, lats, lons, alts, models=["weimer05"], weimer_kw=DRV)
     assert "aacgmv2" in ds.attrs["skipped"]["weimer05"] and ds.attrs["models"] == []
 
+
+# ------------------------------------------------------------------------------------------- heelis82
+HDRV = dict(kp=3., by=0.)                                    # explicit drivers: no index store, no network
+
+
+def test_heelis82_at_low_latitude_is_nan_and_needs_nothing():
+    n = 8
+    t0 = datetime(2024, 5, 12, 4, 0)
+    times = [t0 + timedelta(minutes=k) for k in range(n)]
+    ds = survey.run_track(times, np.linspace(-10, 10, n), np.linspace(-60, 60, n), np.full(n, 400.), models=["heelis82"])
+    assert ds.attrs["models"] == ["heelis82"] and ds.attrs["skipped"] == {}       # no Kp / By were looked up
+    assert not np.isfinite(ds.heelis82_epot.data).any()
+
+
+def test_run_track_heelis82_matches_a_direct_call():
+    import aacgmv2
+    from mpyricalspace import models
+    times, lats, lons, alts = _polar()
+    ds = survey.run_track(times, lats, lons, alts, models=["heelis82"], heelis_kw=HDRV)
+    assert ds.attrs["models"] == ["heelis82"] and ds.attrs["skipped"] == {}
+    assert {"heelis82_epot", "heelis82_mlat", "heelis82_mlt", "heelis82_kp", "heelis82_cp", "heelis82_by"} <= set(ds.data_vars)
+
+    ok = [0, 1, 2, 3]
+    ml, mt = [], []
+    for i in ok:
+        a, b, _ = aacgmv2.convert_latlon(lats[i], lons[i], alts[i], times[i], method_code="G2A")
+        ml.append(a)
+        mt.append(float(np.asarray(aacgmv2.convert_mlt(b, times[i])).reshape(-1)[0]))
+    direct = models.heelis82([times[i] for i in ok], ml, mt, **HDRV)
+    assert np.allclose(ds.heelis82_mlat.data[ok], ml, atol=1e-2) and np.allclose(ds.heelis82_mlt.data[ok], mt, atol=1e-2)
+    assert np.allclose(ds.heelis82_epot.data[ok], direct.epot.values, atol=0.1)
+    assert np.isfinite(ds.heelis82_epot.data[:4]).all()                              # three north and one south
+    assert (ds.heelis82_cp.data[:4] == 15. + 15. * 3. + 0.8 * 9.).all()              # cross-cap potential from Kp = 3
+    assert not np.isfinite(ds.heelis82_epot.data[4:]).any()                          # 20 deg latitude; and above 2000 km
+
+
+def test_run_track_heelis82_single_sample_and_variant():
+    import aacgmv2  # noqa: F401
+    args = ([datetime(2024, 5, 12, 4, 0)], [75.], [-100.], [400.])
+    a = survey.run_track(*args, models=["heelis82"], heelis_kw=HDRV)
+    b = survey.run_track(*args, models=["heelis82"], heelis_kw=dict(HDRV, variant="paper"))
+    assert a.sizes["time"] == 1 and np.isfinite(a.heelis82_epot.data).all()
+    assert b.heelis82_epot.data[0] != a.heelis82_epot.data[0]
+
+
+def test_run_grid_heelis82_agrees_with_run_track():
+    import aacgmv2  # noqa: F401
+    t = datetime(2024, 5, 12, 4, 0)
+    lats, lons = np.arange(60.0, 90.1, 10.0), np.arange(-180.0, 180.0, 60.0)
+    grid = survey.run_grid(times=[t], lats=lats, lons=lons, alts=[400.0], models=["heelis82"], heelis_kw=HDRV)
+    assert grid.heelis82_epot.dims == ("lat", "lon") and grid.heelis82_epot.shape == (4, 6)
+    la, lo = np.meshgrid(lats, lons, indexing="ij")
+    track = survey.run_track([t] * la.size, la.ravel(), lo.ravel(), [400.0] * la.size,
+                             models=["heelis82"], heelis_kw=HDRV)
+    assert np.array_equal(grid.heelis82_epot.values.ravel(), track.heelis82_epot.values, equal_nan=True)
+    assert np.isfinite(grid.heelis82_epot.values).sum() >= 20                        # 60-90 deg geographic: nearly all inside
+
+
+def test_heelis82_and_weimer05_together_share_the_track():
+    import aacgmv2  # noqa: F401
+    times, lats, lons, alts = _polar()
+    ds = survey.run_track(times, lats, lons, alts, models=["weimer05", "heelis82"], weimer_kw=DRV, heelis_kw=HDRV)
+    assert ds.attrs["models"] == ["weimer05", "heelis82"] and ds.attrs["skipped"] == {}
+    assert np.allclose(ds.weimer05_mlat.data[:4], ds.heelis82_mlat.data[:4])         # the same AACGM conversion
+
+
+def test_heelis82_without_aacgmv2_is_skipped_with_a_message(monkeypatch):
+    import sys
+    monkeypatch.setitem(sys.modules, "aacgmv2", None)
+    times, lats, lons, alts = _polar()
+    ds = survey.run_track(times, lats, lons, alts, models=["heelis82"], heelis_kw=HDRV)
+    assert "aacgmv2" in ds.attrs["skipped"]["heelis82"] and ds.attrs["models"] == []

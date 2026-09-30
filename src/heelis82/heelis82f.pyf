@@ -1,0 +1,26 @@
+!    -*- f90 -*-
+! Note: the context of this file is case sensitive.
+!
+! Hand-written on purpose (do not regenerate it with `f2py -h`): only the driver is exposed. f2py's automatic
+! signature would also wrap every variable of the TIE-GCM modules (heelis_module, aurora_module, ...).
+! The model needs 8-byte reals (compiled with -fdefault-real-8), hence real(kind=8) here.
+
+python module heelis82f ! in
+    interface  ! in :heelis82f
+        subroutine heelis82_batch(cp,kp,by,mlat,mlt,variant,prm,xnan,epot,cpused,ier,n,np) ! in :heelis82f:heelis82_batch.f90
+            real(kind=8) dimension(n),intent(in) :: cp
+            real(kind=8) dimension(n),intent(in),depend(cp) :: kp
+            real(kind=8) dimension(n),intent(in),depend(cp) :: by
+            real(kind=8) dimension(n),intent(in),depend(cp) :: mlat
+            real(kind=8) dimension(n),intent(in),depend(cp) :: mlt
+            integer intent(in) :: variant
+            real(kind=8) dimension(np),intent(in) :: prm
+            real(kind=8) intent(in) :: xnan
+            real(kind=8) dimension(n),intent(out),depend(cp) :: epot
+            real(kind=8) dimension(n),intent(out),depend(cp) :: cpused
+            integer intent(out) :: ier
+            integer intent(hide),depend(cp) :: n=len(cp)
+            integer intent(hide),depend(prm) :: np=len(prm)
+        end subroutine heelis82_batch
+    end interface
+end python module heelis82f

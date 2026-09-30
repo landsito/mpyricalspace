@@ -25,6 +25,7 @@ from mpyricalspace import eejm1 as _eejm1, eejm2 as _eejm2, eefm1 as _eefm1
 from mpyricalspace import ppeefm1 as _ppeefm1
 from mpyricalspace import igrf14f, igrf13f, igrf12f, igrf11f, igrf10f, igrf09f, iri26f, iri20f, iri16f, iri12f, iri07f, iri01f
 from mpyricalspace import weimer05f as _w05
+from mpyricalspace import heelis82f as _h82
 from mpyricalspace._grid import flatten_ndgrid, fortran_cwd, pack
 from mpyricalspace.DataManager import manager
 
@@ -1090,6 +1091,26 @@ def dipole_tilt(time):
     return np.degrees(np.arcsin(np.clip((-g11 * gx - h11 * gy - g10 * sz) / b0, -1, 1)))    # north pole = -(g11, h11, g10)/B0
 
 
+def _from_store(dts, name, res, avg, lag):
+    '''
+    Solar-wind / IMF driver `name` ('by', 'bz', 'vsw', 'nsw') at each of `dts`, from the DataManager (NOAA OMNI):
+    the value at the time (avg=None, lag=0), or the mean over the `avg` minutes that end `lag` minutes before it,
+    on the '1min' or '5min' series. Shared by weimer05 and heelis82.
+    '''
+    p = name + ('_5min' if res == '5min' else '')
+    # repeated times (a grid at one time, a track sampled below the store's cadence) are looked up once
+    uniq, inv = np.unique(np.array(dts, dtype='datetime64[s]'), return_inverse=True)
+    ud = uniq.astype(datetime)
+    if avg is None and not lag:
+        return manager().get_values(ud, p)[inv]
+    step = 5 if res == '5min' else 1
+    k, back = max(int(round((avg or step) / step)), 1), int(round(lag / step))
+    h = manager().get_history(ud, p, [-(k - 1) - back, -back], timedelta(minutes=step))
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)                      # an all-NaN window -> NaN
+        return np.nanmean(h, axis=1)[inv]
+
+
 def weimer05(time, mlat, mlt, by=None, bz=None, vsw=None, nsw=None, tilt=None, res='5min', avg=20, lag=0):
     '''
     Weimer high-latitude electric potential and field-aligned current: the spherical-cap-harmonic (SCHA)
@@ -1137,18 +1158,7 @@ def weimer05(time, mlat, mlt, by=None, bz=None, vsw=None, nsw=None, tilt=None, r
             if a.size != nt:
                 raise ValueError("%s must be a scalar or have one value per time (%d), got %d" % (name, nt, a.size))
             return a
-        p = name + ('_5min' if res == '5min' else '')
-        # repeated times (a grid at one time, a track sampled below the store's cadence) are looked up once
-        uniq, inv = np.unique(np.array(dts, dtype='datetime64[s]'), return_inverse=True)
-        ud = uniq.astype(datetime)
-        if avg is None and not lag:
-            return manager().get_values(ud, p)[inv]
-        step = 5 if res == '5min' else 1
-        k, back = max(int(round((avg or step) / step)), 1), int(round(lag / step))
-        h = manager().get_history(ud, p, [-(k - 1) - back, -back], timedelta(minutes=step))
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore', RuntimeWarning)                      # an all-NaN window -> NaN
-            return np.nanmean(h, axis=1)[inv]
+        return _from_store(dts, name, res, avg, lag)
 
     drv = {'by': per_time(by, 'by'), 'bz': per_time(bz, 'bz'), 'vsw': per_time(vsw, 'vsw'), 'nsw': per_time(nsw, 'nsw'),
            'tilt': per_time(tilt, 'tilt') if tilt is not None else dipole_tilt(dts)}
@@ -1187,4 +1197,138 @@ def weimer05(time, mlat, mlt, by=None, bz=None, vsw=None, nsw=None, tilt=None, r
     ds['epot'].attrs.update(units='kV', long_name='electric potential')
     ds['fac'].attrs.update(units='uA/m^2', long_name='field-aligned current density at 110 km',
                            positive='downward (into the ionosphere)')
+    return ds.squeeze()
+
+
+# ===========================================================================
+#  High-latitude convection potential -- Heelis et al. (1982), as implemented in TIE-GCM 2.0
+# ===========================================================================
+_H82_VARIANTS = {'tiegcm': 0, 'paper': 1}
+# the pattern constants that `params` can override, in the order of aurora_module's ovr(:) (src/heelis82/)
+_H82_PARAMS = ('theta0', 'psim', 'psie', 'pcen', 'phid', 'phin', 'phidp', 'phidm', 'phinp', 'phinm', 'offc', 'dskofc',
+               'r1', 'r2', 'thetac', 'dtheta1', 'dtheta2')
+_H3 = 3 * 3600                                     # seconds in a Kp interval
+
+
+def _kp_from_store(dts, interp=True):
+    '''
+    Kp at `dts` from the DataManager (the 3-hourly GFZ values). interp=True: linear in time between the centres of
+    the 3-h intervals (01:30, 04:30, ... UT), which is how TIE-GCM's gpi.F turns the 3-hourly Kp into a value at
+    each model time; a value below 0 is set to 0, also as gpi.F does. interp=False: the value of the 3-h interval
+    that contains the time.
+    '''
+    t = np.array(dts, dtype='datetime64[s]')
+    day = t.astype('datetime64[D]').astype('datetime64[s]')
+    sec = (t - day).astype(float)
+    n3 = np.floor(sec / _H3)
+    b0 = day + (n3 * _H3).astype('timedelta64[s]')                     # start of the 3-h interval that holds t
+    if not interp:
+        uniq, inv = np.unique(b0, return_inverse=True)
+        return manager().get_values(uniq.astype(datetime), 'kp')[inv]
+    early = (sec - n3 * _H3) < _H3 / 2.                                # before the centre of its own interval
+    step = np.timedelta64(_H3, 's')
+    lo, hi = np.where(early, b0 - step, b0), np.where(early, b0, b0 + step)
+    w = (t - lo).astype(float) / _H3 - 0.5                             # 0 at the centre of `lo`, 1 at that of `hi`
+    uniq, inv = np.unique(np.concatenate([lo, hi]), return_inverse=True)
+    k = manager().get_values(uniq.astype(datetime), 'kp')[inv]
+    kp = (1. - w) * k[:t.size] + w * k[t.size:]
+    return np.where(kp < 0, 0., kp)                                    # NaN (no data) stays NaN
+
+
+def heelis82(time, mlat, mlt, kp=None, cp=None, by=None, variant='tiegcm', params=None,
+             res='5min', avg=20, lag=0, kp_interp=True):
+    '''
+    Heelis high-latitude electric potential, the way NCAR's TIE-GCM 2.0 computes it when run with the Heelis
+    potential model (src/heelis82/: the file heelis.F and the empirical relations around it). The aim is to
+    reproduce TIE-GCM's Heelis potential, not to produce a new model. The functional form is that of Heelis,
+    Lowell and Spiro (1982, JGR 87, A8, 6339-6345); the constants and the dependence on the cross-cap potential and
+    IMF By are TIE-GCM's. Returns an xr.Dataset:
+      epot   electric potential [kV], positive in the morning cell and negative in the evening cell
+    0 at |mlat| <= 30 deg (as in TIE-GCM), NaN wherever a driver is missing; plus the drivers used
+    (kp, cp, by) along `time`.
+
+    time         datetime(s).
+    mlat, mlt    magnetic latitude [deg] and magnetic local time [h] of the points. TIE-GCM works on its own magnetic
+                 grid (dipole/apex); AACGM (e.g. from aacgmv2) is the natural equivalent here. Negative latitudes
+                 are the southern hemisphere, which TIE-GCM has its own parameters for (By enters with the opposite
+                 sign). If time, mlat and mlt all have the same length they are aligned samples (e.g. a satellite
+                 track); otherwise the result is a (time, mlat, mlt) cube.
+    kp, cp       what sets the strength of the pattern. cp is the cross-cap potential [kV]; if it is not given (the
+                 default) it is derived from Kp with TIE-GCM's empirical relation, cp = 15 + 15 Kp + 0.8 Kp^2 (Kp
+                 0..9). kp None -> from the DataManager (GFZ 3-hourly), interpolated in time between the interval
+                 centres as TIE-GCM does (kp_interp=False: the value of the interval). A cp you pass wins over Kp.
+    by           IMF By [nT], GSM. Scalar, or one value per time; None -> from the DataManager (NOAA OMNI). TIE-GCM
+                 limits it to -11..+7 nT for the Heelis model, and so does this function.
+    res, avg, lag  How by is taken from the DataManager when it is not given, as in weimer05.
+                 DEFAULT: res='5min', avg=20 -- the MEAN OF THE PREVIOUS 20 MIN of the 5-min series, not the
+                 instantaneous value. (TIE-GCM has no rule: it uses the By the user supplies; a short average is
+                 less noisy and matches how weimer05 is driven.) res: '1min' | '5min' series; avg, lag [min]:
+                 the mean over the `avg` minutes that end `lag` minutes before `time`; avg=None, lag=0 is the
+                 value at `time`, res='1min', avg=None is the instantaneous 1-min value.
+    variant      'tiegcm' (default): TIE-GCM's expressions, the reference. 'paper': the latitude function of
+                 Heelis et al. (1982), which smooths the flow reversal at the convection boundary (TIE-GCM does
+                 not) and takes the polar-cap potential from the paper; a hybrid (the paper's function with
+                 TIE-GCM's parameters) that has not been validated against data.
+    params       dict overriding the pattern constants (both hemispheres): theta0 [deg] (radius of the convection
+                 circle), psim / psie / pcen [kV] (morning cell / evening cell / centre potentials), phid / phin
+                 [MLT h] (centre of the dayside / nightside convergence zone), phidp / phidm / phinp / phinm
+                 [deg] (their half-widths), offc / dskofc [deg] (offset of the pattern from the pole toward
+                 midnight / dusk), r1 (fall-off equatorward of the boundary) and, for variant='paper', r2, thetac
+                 [deg], dtheta1 / dtheta2 [deg] (theta1 - theta0 and theta0 - theta2). See src/heelis82/README.md.
+    '''
+    if variant not in _H82_VARIANTS:
+        raise ValueError("variant must be one of %s (got %r)" % (sorted(_H82_VARIANTS), variant))
+    if res not in ('1min', '5min'):
+        raise ValueError("res must be '1min' or '5min' (got %r)" % (res,))
+    params = dict(params or {})
+    if set(params) - set(_H82_PARAMS):
+        raise ValueError("unknown params %s; the constants are %s" % (sorted(set(params) - set(_H82_PARAMS)), _H82_PARAMS))
+    prm = np.array([params.get(k, np.nan) for k in _H82_PARAMS], float)
+    dts = _t2dt(time); nt = dts.size
+    la = np.atleast_1d(np.asarray(mlat, float))
+    mt = np.mod(np.atleast_1d(np.asarray(mlt, float)), 24.)
+
+    def per_time(val, name):
+        a = np.asarray(val, float).reshape(-1)
+        a = np.full(nt, a[0]) if a.size == 1 else a
+        if a.size != nt:
+            raise ValueError("%s must be a scalar or have one value per time (%d), got %d" % (name, nt, a.size))
+        return a
+
+    cp_t = np.full(nt, np.nan) if cp is None else per_time(cp, 'cp')
+    if kp is not None:
+        kp_t = per_time(kp, 'kp')
+    elif np.isnan(cp_t).any():                           # Kp is only looked up where a cp has to be derived
+        kp_t = _kp_from_store(dts, kp_interp)
+    else:
+        kp_t = np.full(nt, np.nan)
+    by_t = per_time(by, 'by') if by is not None else _from_store(dts, 'by', res, avg, lag)
+
+    # rows: the points of one time step are contiguous, so a whole grid shares its drivers
+    if nt == la.size == mt.size:                                                  # aligned samples
+        ti, lat_r, mlt_r, shape = np.arange(nt), la, mt, None
+    else:                                                                         # (time, mlat, mlt) cube
+        ti = np.repeat(np.arange(nt), la.size * mt.size)
+        lat_r, mlt_r = np.tile(np.repeat(la, mt.size), nt), np.tile(mt, nt * la.size)
+        shape = (nt, la.size, mt.size)
+    row = lambda a: np.ascontiguousarray(a[ti], dtype=float)
+
+    epot, cp_row, ier = _h82.heelis82_batch(row(cp_t), row(kp_t), row(by_t), lat_r, mlt_r,
+                                            _H82_VARIANTS[variant], prm, np.nan)
+    if ier & 2:
+        raise ValueError("Heelis (variant='paper'): the constants %s have no solution: the smoothing region must lie "
+                         "between the pole and 90 deg colatitude (0 < theta0 - dtheta2, theta0 + dtheta1 < 90), "
+                         "r1 < 0, r2 > 0" % (params or 'given'))
+    if ier & 1:
+        warnings.warn("Heelis: some samples have Kp outside 0..9 (and no cp) or a cross-cap potential <= 0; "
+                      "those are NaN", RuntimeWarning)
+
+    t64 = np.array(dts, dtype='datetime64[s]')
+    ds = pack({'epot': epot}, t64, ['time', 'mlat', 'mlt'], shape, {'time': t64, 'mlat': la, 'mlt': mt})
+    first = np.searchsorted(ti, np.arange(nt))                                    # first row of every time step
+    ds = ds.assign(kp=('time', kp_t), cp=('time', cp_row[first]), by=('time', by_t))
+    ds['epot'].attrs.update(units='kV', long_name='electric potential (Heelis model, TIE-GCM 2.0)')
+    ds['cp'].attrs.update(units='kV', long_name='cross-cap potential used')
+    ds['by'].attrs.update(units='nT', long_name='IMF By (before the limits of -11..7 nT)')
+    ds.attrs.update(variant=variant)
     return ds.squeeze()

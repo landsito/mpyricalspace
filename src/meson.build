@@ -66,6 +66,31 @@ py3.extension_module('weimer05f',
    subdir: 'mpyricalspace'
 )
 
+heelis82_module = custom_target('heelis82_module',
+   output: 'heelis82fmodule.c',
+   input: ['heelis82/heelis82f.pyf'],
+   command: [py3, generate_f2pymod, '@INPUT@', '-o', '@OUTDIR@']
+)
+
+# Only heelis82_batch is exposed to python (heelis82f.pyf). heelis.F is NCAR TIE-GCM 2.0's file (modified: see its
+# header); heelis82_modules.f90 replaces the four TIE-GCM modules it imports, and kp_ctpoten.f90 holds TIE-GCM's
+# Kp -> cross-cap potential relation. TIE-GCM needs 8-byte reals too, so -fdefault-real-8 goes on this target only.
+# Meson orders the modules -> heelis.F -> driver itself.
+py3.extension_module('heelis82f',
+   ['heelis82/heelis82_modules.f90',
+    'heelis82/kp_ctpoten.f90',
+    'heelis82/heelis.F',
+    'heelis82/heelis82_batch.f90',
+    heelis82_module,
+   ],
+   include_directories: [inc_np, inc_f2py],
+   dependencies: fortranobject_dep,
+   fortran_args: ['-fdefault-real-8'],
+   install: true,
+   link_language: 'fortran',
+   subdir: 'mpyricalspace'
+)
+
 # Keep hwm14/hwm07's own files in sync with map.nrl.navy.mil before either
 # extension_module() below references them -- see hwm/sync_hwm.py's own
 # docstring for what this does and does not touch, and why.
@@ -518,6 +543,12 @@ install_data(
    'weimer05/W05scBndy.dat',
    'weimer05/LICENSE'],
   install_dir: _pkg_data / 'weimer05',
+)
+
+# the TIE-GCM license must accompany every copy of heelis.F (its section 3c)
+install_data(
+  ['heelis82/tiegcmlicense.txt'],
+  install_dir: _pkg_data / 'heelis82',
 )
 
 # apf107.dat/ig_rz.dat/CCIR/URSI come from iri/common/ (shared across every IRI
