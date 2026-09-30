@@ -30,6 +30,7 @@ EXTENSIONS = {
     "hwm93f":           ("Horizontal Wind Model 1993",                        "hwm/hwm93"),
     "hltwimf":          ("HL-TWiM high-latitude wind (Dhadly et al. 2019)",    "hltwim"),
     "weimer05f":        ("Weimer (2005) high-latitude potential / FAC",        "weimer05"),
+    "heelis82f":        ("Heelis (1982) high-latitude convection, TIE-GCM 2.0", "heelis82"),
     "igrf14f":          ("IGRF-14 geomagnetic field",                         "igrf/igrf14"),
     "igrf13f":          ("IGRF-13 geomagnetic field",                         "igrf/igrf13"),
     "igrf12f":          ("IGRF-12 geomagnetic field",                         "igrf/igrf12"),

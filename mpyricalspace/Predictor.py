@@ -98,6 +98,23 @@ class Empirical(object):
         return models.weimer05(self.time, mlat, mlt, by=by, bz=bz, vsw=vsw, nsw=nsw, tilt=tilt,
                                res=res, avg=avg, lag=lag)
 
+    def run_heelis82(self, mlat, mlt, kp=None, cp=None, by=None, variant='tiegcm', params=None,
+                     res='5min', avg=20, lag=0, kp_interp=True):
+        '''
+        Heelis high-latitude electric potential [kV] as NCAR's TIE-GCM 2.0 computes it with its Heelis potential
+        model, at obj.time, on magnetic latitudes `mlat` [deg; negative = southern hemisphere] and magnetic local
+        times `mlt` [h] -- see models.heelis82 for the coordinates, the (time, mlat, mlt) cube / aligned-samples
+        rule, the `variant` ('tiegcm' | 'paper') and the `params` overrides.
+
+        DRIVERS: the strength of the pattern is the cross-cap potential `cp` [kV]; if you do not pass it, it comes
+        from Kp (`kp`, or the DataManager's 3-hourly Kp interpolated in time as TIE-GCM does) through TIE-GCM's
+        empirical relation cp = 15 + 15 Kp + 0.8 Kp^2. IMF By [nT] comes from the DataManager unless passed, as the
+        MEAN OF THE PREVIOUS 20 MIN of the 5-min OMNI series (res='5min', avg=20), not the instantaneous value
+        (avg=None, res='1min' for that).
+        '''
+        return models.heelis82(self.time, mlat, mlt, kp=kp, cp=cp, by=by, variant=variant, params=params,
+                               res=res, avg=avg, lag=lag, kp_interp=kp_interp)
+
     def run_igrf(self, version='latest', lats=None, lons=None, alts=None):
         return models.igrf(self.time, getattr(self, 'lat', None) if lats is None else lats,
                            getattr(self, 'lon', None) if lons is None else lons,

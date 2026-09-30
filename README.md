@@ -101,12 +101,13 @@ ds = obj.run_igrf(version=14)                      # or version=13 / 12 / 11 / 1
 ds = obj.run_ppeefm1()                             # Manoj & Maus PPEF web service (any date)
 ds = obj.run_ppeefm1(nativelypackaged_code=True)   # same model, run locally from bundled ACE (2001-2007 only)
 ds = obj.run_weimer05(mlat, mlt)                   # Weimer high-latitude potential / FAC; AACGM lat [deg], MLT [h]
+ds = obj.run_heelis82(mlat, mlt)                   # Heelis convection potential as in TIE-GCM 2.0; Kp -> CP, By from the store
 ```
 
 `Empirical` is a thin facade; the models are pure functions in
 `mpyricalspace.models` (`rocsat_drift`, `scherliess_fejer`,
 `jvdm1_drift`, `eej`, `eef`, `hwm`, `hltwim`, `msis`, `igrf`,
-`iri`, `weimer05`) and can be called directly. The shared n-d grid builder / cwd guard /
+`iri`, `weimer05`, `heelis82`) and can be called directly. The shared n-d grid builder / cwd guard /
 Dataset packer live in `mpyricalspace._grid`.
 
 **`run_weimer05(mlat, mlt)`** takes AACGM latitude (negative = southern hemisphere) and magnetic local time and returns
@@ -118,6 +119,7 @@ Weimer 2005b), **not** instantaneous values — `avg=None, res='1min'` gives tho
 Options, limits and validation: [`src/weimer05/README.md`](src/weimer05/README.md); the Weimer files carry their own
 non-commercial [license](src/weimer05/LICENSE).
 
+**`run_heelis82(mlat, mlt)`** takes magnetic latitude (negative = southern hemisphere) and magnetic local time and returns the Heelis high-latitude convection potential `epot` [kV] **the way NCAR's TIE-GCM 2.0 computes it**. The drivers (`by`, `cp` [kV]) are used as given; if `by` is left out, IMF \(B_y\) comes from the index store (NOAA OMNI) as the **mean of the previous 20 min of the 5-min series** (`res='5min', avg=20`) — `avg=None, res='1min'` gives the instantaneous value. If `cp` is left out, it is derived from \(K_p\) (`kp`, provided or from the store, interpolated in time as TIE-GCM does) using TIE-GCM's relation \(CP = 15 + 15K_p + 0.8K_p^2\). `variant='paper'` replaces TIE-GCM's latitude function with the smoothed function from the original paper (`examples/plot_heelis82_fig04.py` reproduces its Fig. 4). Notes, parameters and validation: [`src/heelis82/README.md`](src/heelis82/README.md); the TIE-GCM files carry its research-only NCAR TIE-GCM [license](`src/heelis82/tiegcmlicense.txt`).
 ### Many models at once — along a track or over a grid
 
 `mpyricalspace.survey` runs every *applicable* model for a set of points and
@@ -141,7 +143,7 @@ list(survey.model_domains())                       # the allowed model names
 survey.model_domains()                             # + kind / altitude window / mag-lat cap each
 ```
 
-The high-latitude models (`hltwim`, `weimer05`) are evaluated only poleward of their boundary. **`weimer05`**
+The high-latitude models (`hltwim`, `weimer05`, `heelis82`) are evaluated only poleward of their boundary. **`weimer05`**
 converts the geographic samples to AACGM with [`aacgmv2`](https://pypi.org/project/aacgmv2/) (installed with the
 package) and returns `weimer05_epot` [kV] and `weimer05_fac` [µA/m², + downward], plus the AACGM coordinates and the
 drivers it used. `weimer_kw={...}` passes any `models.weimer05` keyword (for example explicit drivers):
@@ -153,6 +155,16 @@ ds = survey.run_grid(times=[t], lats=np.arange(60, 90.1, 5.), lons=np.arange(-18
 ```
 
 Limits (30° latitude, 2000 km, `fac` altitude) are in [`src/weimer05/README.md`](src/weimer05/README.md#in-the-survey).
+
+**`heelis82`** works the same way (same AACGM conversion) and returns `heelis82_epot` [kV] plus the AACGM coordinates and
+the drivers used (`heelis82_kp`, `_cp`, `_by`); it is evaluated where the AACGM latitude is poleward of 30° (NaN elsewhere and
+above 2000 km), and `heelis_kw={...}` passes any `models.heelis82` keyword (`kp`, `cp`, `by`, `variant`, `params`, ...):
+
+```python
+ds = survey.run_track(times, lats, lons, alts, models=["heelis82"])                        # Kp and By from the store
+ds = survey.run_grid(times=[t], lats=np.arange(50, 90.1, 5.), lons=np.arange(-180, 180, 10.),
+                     alts=[400.], models=["weimer05", "heelis82"], heelis_kw=dict(kp=5., by=-3.))
+```
 
 The global models (`igrf`, `msis`, `hwm`, `iri`) run at every sample. The
 equatorial-electrodynamics models describe a magnetic-equator parameter vs
@@ -465,3 +477,14 @@ or from development sites, or developed and provided by different researchers.
 > Weimer, D. R. (2005b), Predicting surface geomagnetic variations using ionospheric
 > electrodynamic models, J. Geophys. Res., 110, A12307,
 > [doi:10.1029/2005JA011270](https://doi.org/10.1029/2005JA011270)
+
+#### `Empirical.run_heelis82` (Heelis pattern as implemented in NCAR TIE-GCM 2.0)
+
+> Heelis, R. A., Lowell, J. K., and Spiro, R. W. (1982), A model of the high-latitude
+> ionospheric convection pattern, J. Geophys. Res., 87(A8), 6339-6345,
+> [doi:10.1029/JA087iA08p06339](https://doi.org/10.1029/JA087iA08p06339)
+>
+> Qian, L., et al. (2014), The NCAR TIE-GCM: A community model of the coupled
+> thermosphere/ionosphere system, in Modeling the Ionosphere-Thermosphere System,
+> AGU Geophysical Monograph 201, 73-83,
+> [doi:10.1002/9781118704417.ch7](https://doi.org/10.1002/9781118704417.ch7)

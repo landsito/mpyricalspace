@@ -16,7 +16,7 @@ why.  Variables carry the model name (``igrf_B``, ``hwm_u``, ``iri_NMF2``,
 ``eej``, ``eef``, ``sf_qvdrift``, ``manoj_ppef`` ...).
 
 The global models (IGRF, MSIS, HWM, IRI) are evaluated at every sample.  The high-latitude ones
-(HL-TWiM, Weimer) are evaluated only poleward of their boundary:
+(HL-TWiM, Weimer, Heelis) are evaluated only poleward of their boundary:
 
     weimer05  Weimer (2005) electric potential [kV] and field-aligned current [uA/m^2, + downward], driven by
               the IMF / solar wind from the DataManager.  Uses `aacgmv2` (a package dependency) for geographic -> AACGM; only samples
@@ -24,8 +24,14 @@ The global models (IGRF, MSIS, HWM, IRI) are evaluated at every sample.  The hig
               above 2000 km (AACGM's limit).  Variables weimer05_epot / _fac plus the AACGM coordinates and the
               drivers used (weimer05_mlat, _mlt, _by, _bz, _vsw, _nsw, _tilt).  Options via weimer_kw={...}
               (by, bz, vsw, nsw, tilt, res, avg, lag -- see models.weimer05; default drivers are the previous
-              20 min of the 5-min OMNI series).  fac is the density at 110 km, not at the sample altitude.  The
-equatorial-electrodynamics models describe a quantity at the magnetic equator as
+              20 min of the 5-min OMNI series).  fac is the density at 110 km, not at the sample altitude.
+    heelis82  Heelis (1982) convection potential [kV] as NCAR's TIE-GCM 2.0 computes it, driven by Kp (-> cross-cap
+              potential) and IMF By from the DataManager.  Same AACGM conversion as weimer05; evaluated where the
+              AACGM latitude is poleward of 30 deg (the model's own limit), NaN elsewhere and above 2000 km.
+              Variables heelis82_epot plus heelis82_mlat, _mlt, _kp, _cp, _by.  Options via heelis_kw={...}
+              (kp, cp, by, variant, params, res, avg, lag, kp_interp -- see models.heelis82).
+
+The equatorial-electrodynamics models describe a quantity at the magnetic equator as
 a function of longitude and local time -- NOT of the sample's latitude -- so they
 are computed only within a few degrees of the dip equator (IGRF dip latitude, at
 most ``equator_deg``) and only inside their altitude regime:
@@ -112,7 +118,7 @@ def _aacgm(t, lat, lon, alt):
     try:
         import aacgmv2
     except ImportError as e:
-        raise ImportError("weimer05 needs `aacgmv2` to convert geographic coordinates to AACGM "
+        raise ImportError("weimer05 / heelis82 need `aacgmv2` to convert geographic coordinates to AACGM "
                           "(pip install aacgmv2)") from e
     dts = t.astype('datetime64[s]').astype(datetime)
     day = t.astype('datetime64[D]')
@@ -153,6 +159,35 @@ def _a_weimer05(t, lat, lon, alt, o):
     return xr.Dataset({k: ('time', v) for k, v in cols.items()}, coords={'time': t})
 
 
+_HEELIS_MIN_LAT = 15.0        # geographic |lat| below which |AACGM lat| cannot reach the model's limit: not converted
+_HEELIS_MIN_MLAT = 30.0       # the model's own limit (models.heelis82 gives 0 at or below it): NaN in the survey
+_HEELIS_VARS = ('epot', 'mlat', 'mlt', 'kp', 'cp', 'by')
+
+
+def _a_heelis82(t, lat, lon, alt, o):
+    '''Heelis convection potential [kV], as TIE-GCM 2.0 computes it: the samples are converted to AACGM and those
+       poleward of 30 deg AACGM latitude are evaluated as aligned (time, mlat, mlt) samples; the rest (and
+       AACGM-undefined points) stay NaN, and the drivers are not looked up if none is inside. `heelis_kw` are
+       models.heelis82 keyword arguments (per-sample arrays of length n are subset along with the samples).
+       (30 deg geographic would miss the American sector, where AACGM 30 deg is near 20 deg geographic, hence the
+       lower geographic pre-filter.)'''
+    kw = dict(o.get('heelis_kw') or {})
+    n = t.size
+    cols = {k: np.full(n, np.nan) for k in _HEELIS_VARS}
+    pre = np.abs(lat) >= _HEELIS_MIN_LAT
+    if pre.any():
+        mlat, mlt = _aacgm(t[pre], lat[pre], lon[pre], alt[pre])
+        cols['mlat'][pre], cols['mlt'][pre] = mlat, mlt
+        inside = np.zeros(n, bool)
+        inside[pre] = np.abs(mlat) > _HEELIS_MIN_MLAT                    # NaN (AACGM undefined) compares False
+        if inside.any():
+            sub = {k: (np.asarray(v)[inside] if np.ndim(v) and np.size(v) == n else v) for k, v in kw.items()}
+            ds = _m.heelis82(t[inside], cols['mlat'][inside], cols['mlt'][inside], **sub)
+            for k in ('epot', 'kp', 'cp', 'by'):
+                cols[k][inside] = ds[k].values.reshape(-1)              # reshape: a single sample comes back squeezed
+    return xr.Dataset({k: ('time', v) for k, v in cols.items()}, coords={'time': t})
+
+
 def _a_manoj(t, lat, lon, alt, o):
     '''Manoj-Maus RTEEF prompt-penetration equatorial E-field [mV/m], local model.
        ppef is the ACE IEF Ey run through the TF.COF filter -- a single
@@ -183,6 +218,7 @@ _REGISTRY = {
     'iri':    dict(kind='global',   adapter=_a_iri,    alt_km=(60., 2000.),  maglat=None, needs_alt=True),
     'hltwim': dict(kind='high_lat', adapter=_a_hltwim, alt_km=None,          maglat=None, needs_alt=False),
     'weimer05': dict(kind='high_lat', adapter=_a_weimer05, alt_km=(0., 2000.), maglat=None, needs_alt=True),
+    'heelis82': dict(kind='high_lat', adapter=_a_heelis82, alt_km=(0., 2000.), maglat=None, needs_alt=True),
     'sf':     dict(kind='equator',  adapter=_a_sf,     alt_km=(200., 900.),  maglat=2.5,  needs_alt=False),
     'rocsat': dict(kind='equator',  adapter=_a_rocsat, alt_km=(200., 900.),  maglat=3.0,  needs_alt=False),
     'eej':    dict(kind='equator',  adapter=_a_eej,    alt_km=(90., 130.),   maglat=5.0,  needs_alt=False),
@@ -190,7 +226,7 @@ _REGISTRY = {
     'manoj':  dict(kind='equator',  adapter=_a_manoj,  alt_km=(200., 900.),  maglat=5.0,  needs_alt=False),
 }
 
-_FULL_NAME = {'weimer05': 'weimer05 (Weimer 2005, AACGM)', 'sf': 'scherliess_fejer (quiet)', 'manoj': 'manoj_maus (local RTEEF)',
+_FULL_NAME = {'weimer05': 'weimer05 (Weimer 2005, AACGM)', 'heelis82': 'heelis82 (Heelis 1982 as in TIE-GCM 2.0, AACGM)', 'sf': 'scherliess_fejer (quiet)', 'manoj': 'manoj_maus (local RTEEF)',
               'eej': 'eej', 'eef': 'eef', 'rocsat': 'rocsat_drift'}
 
 
@@ -200,7 +236,7 @@ def model_domains():
     note = {
         'global':   'evaluated at every sample',
         'high_lat': 'auroral / polar cap only (hltwim: |QD magnetic latitude| > 40 deg; weimer05: poleward of '
-                    'the auroral boundary, |geographic latitude| >= 30 deg); NaN elsewhere',
+                    'the auroral boundary, |geographic latitude| >= 30 deg; heelis82: |AACGM latitude| > 30 deg); NaN elsewhere',
         'equator':  'a magnetic-equator quantity vs longitude; masked to the dip equator and its altitude regime',
     }
     return {name: {'kind': r['kind'], 'altitude_km': r['alt_km'], 'maglat_deg': r['maglat'],
@@ -238,7 +274,9 @@ def run_track(times, lats, lons, alts=None, models=None, equator_deg=20.0, **opt
              nativelypackaged_indices (iri / msis / manoj -- False: DataManager (default);
              True: each model's own bundled index file) / weimer_kw (dict of models.weimer05
              keyword arguments -- by, bz, vsw, nsw, tilt, res, avg, lag; default: the IMF / solar wind
-             from the DataManager as the mean of the previous 20 min of the 5-min series).
+             from the DataManager as the mean of the previous 20 min of the 5-min series) / heelis_kw (dict of
+             models.heelis82 keyword arguments -- kp, cp, by, variant, params, res, avg, lag, kp_interp; default: Kp
+             and By from the DataManager, cross-cap potential from Kp as TIE-GCM does).
 
     Out-of-domain samples come back as NaN.  ``ds.attrs['models']`` lists what
     ran, ``ds.attrs['skipped']`` what did not and why.
