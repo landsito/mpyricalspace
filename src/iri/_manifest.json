@@ -3,14 +3,6 @@
     "Fri, 26 Apr 2013 15:40:03 GMT",
     "6715"
   ],
-  "iri01/dgrf00.dat": [
-    "Fri, 26 Apr 2013 15:41:37 GMT",
-    "1655"
-  ],
-  "iri01/dgrf05.dat": [
-    "Fri, 26 Apr 2013 15:41:43 GMT",
-    "1776"
-  ],
   "iri01/dgrf45.dat": [
     "Fri, 26 Apr 2013 15:42:28 GMT",
     "1591"
@@ -58,14 +50,6 @@
   "iri01/igrf.for": [
     "Fri, 26 Apr 2013 15:39:58 GMT",
     "48724"
-  ],
-  "iri01/igrf10.dat": [
-    "Fri, 26 Apr 2013 15:41:56 GMT",
-    "1656"
-  ],
-  "iri01/igrf10s.dat": [
-    "Fri, 26 Apr 2013 15:42:01 GMT",
-    "1132"
   ],
   "iri01/iridreg.for": [
     "Fri, 26 Apr 2013 15:40:31 GMT",

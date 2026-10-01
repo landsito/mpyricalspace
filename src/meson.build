@@ -605,11 +605,12 @@ foreach y : range(1945, 2006, 5)
 endforeach
 install_data(_iri07, install_dir: _pkg_data / 'iri07')
 
-# IRI-2001: 2-digit dgrf/igrf file names (dgrf45.dat ... dgrf95.dat, dgrf00.dat,
-# dgrf05.dat, igrf10.dat/igrf10s.dat) -- doesn't fit a clean numeric range, listed
-# explicitly as published on the site.
-_iri01 = ['iri/iri01/igrf10.dat', 'iri/iri01/igrf10s.dat']
-foreach y : ['45', '50', '55', '60', '65', '70', '75', '80', '85', '90', '95', '00', '05']
+# IRI-2001: 2-digit dgrf file names (dgrf45.dat ... dgrf95.dat) plus the original
+# igrf00.dat/igrf00s.dat (IGRF-2000) its igrf.for opens and the ap.dat its storm
+# model reads -- the last three are no longer on irimodel.org and are vendored
+# in iri/iri01/ (see iri/README.md).
+_iri01 = ['iri/iri01/igrf00.dat', 'iri/iri01/igrf00s.dat', 'iri/iri01/ap.dat']
+foreach y : ['45', '50', '55', '60', '65', '70', '75', '80', '85', '90', '95']
   _iri01 += 'iri/iri01/dgrf' + y + '.dat'
 endforeach
 install_data(_iri01, install_dir: _pkg_data / 'iri01')
