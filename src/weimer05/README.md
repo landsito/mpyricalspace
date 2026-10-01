@@ -51,7 +51,7 @@ driven by the IMF, the solar wind and the dipole tilt. `Empirical.run_weimer05` 
 ## Driver averaging
 
 Drivers you do not pass (`by`, `bz`, `vsw`, `nsw`) come from the index store (NOAA OMNI; see
-[Geophysical indices](../../README.md#geophysical-indices)). **By default each is the mean of the previous 20 minutes
+[Geophysical indices (and Solar Wind data)](../../README.md#geophysical-indices-and-solar-wind-data)). **By default each is the mean of the previous 20 minutes
 of the 5-minute series** (`res='5min', avg=20`), which is how Weimer (2005b) drives the model — not the instantaneous
 value.
 
