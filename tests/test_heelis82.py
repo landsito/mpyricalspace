@@ -66,33 +66,33 @@ def h(mlat, mlt, **kw):
 # ---------------------------------------------------------------------------- the TIE-GCM reference
 def test_tiegcm_variant_matches_the_untouched_tiegcm_file():
     cp, by, lat, mlt, v = map(np.array, zip(*REF))
-    got = np.array([float(h([la], [m], cp=c, by=b).epot) for c, b, la, m in zip(cp, by, lat, mlt)]) * 1e3
+    got = np.array([h([la], [m], cp=c, by=b).epot.item() for c, b, la, m in zip(cp, by, lat, mlt)]) * 1e3
     assert np.allclose(got, v, rtol=1e-9, atol=1e-6)
 
 
 def test_paper_variant_is_not_the_default():
     a, b = h(78., 18., cp=45.), h(78., 18., cp=45., variant='paper')
-    assert float(a.epot) == float(h(78., 18., cp=45., variant='tiegcm').epot) and float(a.epot) != float(b.epot)
+    assert a.epot.item() == h(78., 18., cp=45., variant='tiegcm').epot.item() and a.epot.item() != b.epot.item()
 
 
 # ------------------------------------------------------------------------------ Kp -> cross-cap potential
 @pytest.mark.parametrize('kp', [0., 1., 3., 4.5, 6., 9.])
 def test_kp_to_cp_is_the_tiegcm_relation(kp):
     ds = h(78., 18., kp=kp)
-    assert float(ds.cp) == pytest.approx(15. + 15. * kp + 0.8 * kp ** 2)                # util.F ctpoten_from_kp
-    assert float(ds.epot) == float(h(78., 18., cp=float(ds.cp)).epot)
+    assert ds.cp.item() == pytest.approx(15. + 15. * kp + 0.8 * kp ** 2)                # util.F ctpoten_from_kp
+    assert ds.epot.item() == h(78., 18., cp=ds.cp.item()).epot.item()
 
 
 def test_cp_wins_over_kp():
-    assert float(h(78., 18., kp=9., cp=45.).cp) == 45.
-    assert float(h(78., 18., kp=9., cp=45.).epot) == float(h(78., 18., cp=45.).epot)
+    assert h(78., 18., kp=9., cp=45.).cp.item() == 45.
+    assert h(78., 18., kp=9., cp=45.).epot.item() == h(78., 18., cp=45.).epot.item()
 
 
 def test_bad_kp_or_cp_gives_nan_and_a_warning():
     for kw in ({'kp': -0.5}, {'kp': 9.5}, {'cp': -3.}, {'cp': 0.}):
         with pytest.warns(RuntimeWarning):
-            assert np.isnan(float(h(78., 18., **kw).epot))
-    assert np.isnan(float(h(78., 18., kp=np.nan).epot))                                 # missing: NaN, no warning
+            assert np.isnan(h(78., 18., **kw).epot.item())
+    assert np.isnan(h(78., 18., kp=np.nan).epot.item())                                 # missing: NaN, no warning
 
 
 # ----------------------------------------------------------------------------------- the pattern
@@ -105,8 +105,8 @@ def test_extremes_are_the_boundary_potentials_and_their_difference_is_the_cross_
 
 def test_morning_cell_positive_evening_cell_negative():
     lat = 77.
-    assert float(h(lat, 5., cp=45.).epot) > 15. and float(h(lat, 17., cp=45.).epot) < -20.
-    assert float(h(lat, 5., cp=90.).epot) > float(h(lat, 5., cp=45.).epot)                 # stronger drive
+    assert h(lat, 5., cp=45.).epot.item() > 15. and h(lat, 17., cp=45.).epot.item() < -20.
+    assert h(lat, 5., cp=90.).epot.item() > h(lat, 5., cp=45.).epot.item()                 # stronger drive
 
 
 def test_zero_at_or_below_30_degrees_and_finite_at_the_poles():
@@ -116,9 +116,9 @@ def test_zero_at_or_below_30_degrees_and_finite_at_the_poles():
 
 
 def test_by_limits_of_tiegcm():
-    assert float(h(78., 18., cp=45., by=30.).epot) == float(h(78., 18., cp=45., by=7.).epot)
-    assert float(h(78., 18., cp=45., by=-40.).epot) == float(h(78., 18., cp=45., by=-11.).epot)
-    assert float(h(78., 18., cp=45., by=5.).epot) != float(h(78., 18., cp=45., by=0.).epot)
+    assert h(78., 18., cp=45., by=30.).epot.item() == h(78., 18., cp=45., by=7.).epot.item()
+    assert h(78., 18., cp=45., by=-40.).epot.item() == h(78., 18., cp=45., by=-11.).epot.item()
+    assert h(78., 18., cp=45., by=5.).epot.item() != h(78., 18., cp=45., by=0.).epot.item()
 
 
 @pytest.mark.parametrize('variant', ['tiegcm', 'paper'])
@@ -228,14 +228,14 @@ def test_paper_variant_keeps_the_cross_cap_potential_and_is_zero_at_the_pole():
     mlat, mlt = np.arange(40., 89.96, 0.1), np.arange(0., 24., 0.05)
     e = h(mlat, mlt, cp=45., variant='paper').epot.values
     assert e.max() - e.min() == pytest.approx(45., abs=0.05)
-    assert abs(float(h(90., 12., cp=45., variant='paper', params={'offc': 1e-6}).epot)) < 0.2  # G(0) = 0 (tiegcm: ~ -9 kV)
+    assert abs(h(90., 12., cp=45., variant='paper', params={'offc': 1e-6}).epot.item()) < 0.2  # G(0) = 0 (tiegcm: ~ -9 kV)
 
 
 def test_paper_variant_rejects_constants_without_a_solution():
     for bad in ({'dtheta2': 20.}, {'dtheta1': 0.}, {'r1': 1.}, {'r2': -1.}):
         with pytest.raises(ValueError):
             h(70., 12., cp=45., variant='paper', params=bad)
-    assert np.isfinite(float(h(70., 12., cp=45., params={'dtheta2': 20.}).epot))              # the tiegcm variant has no such need
+    assert np.isfinite(h(70., 12., cp=45., params={'dtheta2': 20.}).epot.item())              # the tiegcm variant has no such need
 
 
 # ------------------------------------------------------------------------------ drivers from the DataManager
@@ -266,29 +266,29 @@ def test_kp_is_interpolated_between_interval_centres_like_tiegcm(store):
 def test_default_drivers_kp_interpolated_by_20min_mean(store):
     ds = models.heelis82(T0, [78.], [18.])
     i = list(pd.date_range('2024-05-11 11:00', '2024-05-11 12:30', freq='5min')).index(pd.Timestamp(T0))
-    assert float(ds.kp) == 3.5 and float(ds.by) == pytest.approx(np.mean([i - 3, i - 2, i - 1, i]))
-    assert float(ds.cp) == pytest.approx(15. + 15. * 3.5 + 0.8 * 3.5 ** 2)
-    explicit = models.heelis82(T0, [78.], [18.], cp=float(ds.cp), by=float(ds.by))
-    assert float(explicit.epot) == float(ds.epot)
+    assert ds.kp.item() == 3.5 and ds.by.item() == pytest.approx(np.mean([i - 3, i - 2, i - 1, i]))
+    assert ds.cp.item() == pytest.approx(15. + 15. * 3.5 + 0.8 * 3.5 ** 2)
+    explicit = models.heelis82(T0, [78.], [18.], cp=ds.cp.item(), by=ds.by.item())
+    assert explicit.epot.item() == ds.epot.item()
 
 
 def test_by_recipes(store):
     inst = models.heelis82(T0, [78.], [18.], res='1min', avg=None)
-    assert float(inst.by) == 2.0
+    assert inst.by.item() == 2.0
     five = models.heelis82(T0, [78.], [18.], res='5min', avg=None)
     i = list(pd.date_range('2024-05-11 11:00', '2024-05-11 12:30', freq='5min')).index(pd.Timestamp(T0))
-    assert float(five.by) == float(i)
-    assert float(models.heelis82(T0, [78.], [18.], avg=10, lag=5).by) == pytest.approx(i - 1.5)   # samples i-2, i-1
+    assert five.by.item() == float(i)
+    assert models.heelis82(T0, [78.], [18.], avg=10, lag=5).by.item() == pytest.approx(i - 1.5)   # samples i-2, i-1
 
 
 def test_cp_given_needs_no_kp_and_passed_values_are_not_averaged(store):
     ds = models.heelis82(datetime(2024, 5, 10, 3), [78.], [18.], cp=45., by=3.)         # no Kp stored for that day
-    assert np.isfinite(float(ds.epot)) and float(ds.by) == 3.0
+    assert np.isfinite(ds.epot.item()) and ds.by.item() == 3.0
 
 
 def test_no_data_gives_nan_not_error(store):
     ds = models.heelis82(datetime(2024, 5, 10, 3), [78.], [18.])
-    assert np.isnan(float(ds.epot)) and np.isnan(float(ds.kp))
+    assert np.isnan(ds.epot.item()) and np.isnan(ds.kp.item())
 
 
 def test_facade_run_heelis82(store):

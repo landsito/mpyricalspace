@@ -552,14 +552,22 @@ install_data(
 )
 
 # apf107.dat/ig_rz.dat/CCIR/URSI come from iri/common/ (shared across every IRI
-# version -- see iri/sync_iri.py's docstring) rather than each version's own folder.
+# version -- see iri/sync_iri.py's docstring) and are installed ONCE, to
+# _data/iri_common/; models._iri_srcdirs() pairs that dir with each version's own.
+# They must not be listed under every version: meson keys its install plan by
+# source file, so a file passed to several install_data() calls is installed
+# only by the last one (it used to land in _data/iri01/ and nowhere else).
+_iri_common = ['iri/common/apf107.dat', 'iri/common/ig_rz.dat']
+foreach m : range(11, 23)
+  _iri_common += ['iri/common/ccir' + m.to_string() + '.asc',
+                  'iri/common/ursi' + m.to_string() + '.asc']
+endforeach
+install_data(_iri_common, install_dir: _pkg_data / 'iri_common')
 
 # IRI-2016: IGRF-13 (igrf2020.dat), dgrf definitive to 2015
-_iri16 = ['iri/common/apf107.dat', 'iri/common/ig_rz.dat', 'iri/iri16/igrf2020.dat', 'iri/iri16/igrf2020s.dat']
+_iri16 = ['iri/iri16/igrf2020.dat', 'iri/iri16/igrf2020s.dat']
 foreach m : range(11, 23)
-  _iri16 += ['iri/common/ccir'  + m.to_string() + '.asc',
-             'iri/common/ursi'  + m.to_string() + '.asc',
-             'iri/iri16/mcsat' + m.to_string() + '.dat']
+  _iri16 += 'iri/iri16/mcsat' + m.to_string() + '.dat'
 endforeach
 foreach y : range(1945, 2016, 5)
   _iri16 += 'iri/iri16/dgrf' + y.to_string() + '.dat'
@@ -569,12 +577,9 @@ install_data(_iri16, install_dir: _pkg_data / 'iri16')
 # IRI-2020 (v2020.35) and IRI-2026: IGRF-14 (dgrf2020 definitive, igrf2025 provisional);
 # IRI-2026 additionally ships ibp_emp_coeffs.dat for the Stolle et al. (2023) bubble model
 foreach ver : ['iri20', 'iri26']
-  _iri = ['iri/common/apf107.dat', 'iri/common/ig_rz.dat',
-          'iri' / ver / 'igrf2025.dat', 'iri' / ver / 'igrf2025s.dat']
+  _iri = ['iri' / ver / 'igrf2025.dat', 'iri' / ver / 'igrf2025s.dat']
   foreach m : range(11, 23)
-    _iri += ['iri/common/ccir'  + m.to_string() + '.asc',
-             'iri/common/ursi'  + m.to_string() + '.asc',
-             'iri' / ver / ('mcsat' + m.to_string() + '.dat')]
+    _iri += 'iri' / ver / ('mcsat' + m.to_string() + '.dat')
   endforeach
   foreach y : range(1945, 2021, 5)
     _iri += 'iri' / ver / ('dgrf' + y.to_string() + '.dat')
@@ -586,14 +591,7 @@ foreach ver : ['iri20', 'iri26']
 endforeach
 
 # IRI-2012: dgrf up to 2010, igrf2015 (not 2020), no mcsat storm model.
-# apf107.dat/ig_rz.dat/ccir/ursi come from iri/common/ (shared across every
-# IRI version -- see iri/sync_iri.py's docstring) rather than this version's
-# own folder.
-_iri12 = ['iri/common/apf107.dat', 'iri/common/ig_rz.dat']
-foreach m : range(11, 23)
-  _iri12 += ['iri/common/ccir' + m.to_string() + '.asc', 'iri/common/ursi' + m.to_string() + '.asc']
-endforeach
-_iri12 += ['iri/iri12/igrf2015.dat', 'iri/iri12/igrf2015s.dat']
+_iri12 = ['iri/iri12/igrf2015.dat', 'iri/iri12/igrf2015s.dat']
 foreach y : range(1945, 2011, 5)
   _iri12 += 'iri/iri12/dgrf' + y.to_string() + '.dat'
 endforeach
@@ -601,11 +599,7 @@ install_data(_iri12, install_dir: _pkg_data / 'iri12')
 
 # IRI-2007: dgrf up to 2005, igrf2010 -- same coefficient vintage as iri12's own
 # (pre-sync) copy, just an older irisub.for/irifun.for (no iriflip.for at all).
-_iri07 = ['iri/common/apf107.dat', 'iri/common/ig_rz.dat']
-foreach m : range(11, 23)
-  _iri07 += ['iri/common/ccir' + m.to_string() + '.asc', 'iri/common/ursi' + m.to_string() + '.asc']
-endforeach
-_iri07 += ['iri/iri07/igrf2010.dat', 'iri/iri07/igrf2010s.dat']
+_iri07 = ['iri/iri07/igrf2010.dat', 'iri/iri07/igrf2010s.dat']
 foreach y : range(1945, 2006, 5)
   _iri07 += 'iri/iri07/dgrf' + y.to_string() + '.dat'
 endforeach
@@ -614,11 +608,7 @@ install_data(_iri07, install_dir: _pkg_data / 'iri07')
 # IRI-2001: 2-digit dgrf/igrf file names (dgrf45.dat ... dgrf95.dat, dgrf00.dat,
 # dgrf05.dat, igrf10.dat/igrf10s.dat) -- doesn't fit a clean numeric range, listed
 # explicitly as published on the site.
-_iri01 = ['iri/common/apf107.dat', 'iri/common/ig_rz.dat']
-foreach m : range(11, 23)
-  _iri01 += ['iri/common/ccir' + m.to_string() + '.asc', 'iri/common/ursi' + m.to_string() + '.asc']
-endforeach
-_iri01 += ['iri/iri01/igrf10.dat', 'iri/iri01/igrf10s.dat']
+_iri01 = ['iri/iri01/igrf10.dat', 'iri/iri01/igrf10s.dat']
 foreach y : ['45', '50', '55', '60', '65', '70', '75', '80', '85', '90', '95', '00', '05']
   _iri01 += 'iri/iri01/dgrf' + y + '.dat'
 endforeach

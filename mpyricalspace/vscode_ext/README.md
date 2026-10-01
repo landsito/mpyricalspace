@@ -89,9 +89,11 @@ The first command cleans up its temporary build directory automatically. The
 `build` command optionally accepts an existing output directory. These package
 entry points remain supported for compatibility, but can trigger an editable
 rebuild; use the direct script above to avoid importing the library. The observer
-never calls them. The legacy automatic installation attempt runs only in a VS Code
-environment with an available editor CLI. Set `MPYRICALSPACE_NO_VSCODE=1` to opt
-out of that automatic attempt. Uninstall with:
+never calls them. The legacy automatic installation attempt is **off by default**;
+set `MPYRICALSPACE_VSCODE_AUTOINSTALL=1` to opt in. It then runs once, only in a
+VS Code environment with an available editor CLI (delete
+`~/.cache/mpyricalspace/vscode-ext.tried` to let it retry).
+`MPYRICALSPACE_NO_VSCODE=1` always disables it, even when opted in. Uninstall with:
 
 ```bash
 code --uninstall-extension mpyricalspace.mpyricalspace-build-status

@@ -7,9 +7,9 @@ __version__ = importlib.metadata.version("mpyricalspace")
 __all__ = ["__version__", "Predictor", "DataManager", "models", "survey",
            "build_info", "build_report"]
 
-# One-time, best-effort: offer the companion VS Code extension when imported from
-# a VS Code terminal (wheels have no post-install hook). Never blocks, never
-# raises; opt out with MPYRICALSPACE_NO_VSCODE=1.
+# Opt-in (MPYRICALSPACE_VSCODE_AUTOINSTALL=1), one-time, best-effort: install the
+# companion VS Code extension when imported from a VS Code terminal (wheels have no
+# post-install hook). Off by default; never blocks, never raises.
 try:
     from mpyricalspace._vscode import maybe_autoinstall as _maybe_vscode
     _maybe_vscode(background=True)

@@ -18,11 +18,13 @@ may trigger an editable rebuild because they enter the package:
     python -m mpyricalspace vscode build [DIR]  # build only; defaults to current directory
     python -m mpyricalspace vscode status       # installation status and log location
 
-The legacy first-run installation hook is best-effort and requires a VS Code
-environment and an available editor CLI. A ``vscode-ext.tried`` sentinel prevents
-retries; installation logs go to ``vscode-ext.log`` in ``MPYRICALSPACE_DATA_DIR``
-(default: ``~/.cache/mpyricalspace``). Set ``MPYRICALSPACE_NO_VSCODE=1`` to disable
-automatic installation; explicit manual commands remain available.
+The legacy first-run installation hook is OFF by default: importing the package
+never installs anything unless ``MPYRICALSPACE_VSCODE_AUTOINSTALL=1`` is set. When
+enabled, it is best-effort and requires a VS Code environment and an available
+editor CLI. A ``vscode-ext.tried`` sentinel prevents retries; installation logs go
+to ``vscode-ext.log`` in ``MPYRICALSPACE_DATA_DIR`` (default:
+``~/.cache/mpyricalspace``). ``MPYRICALSPACE_NO_VSCODE=1`` always wins and disables
+it even when opted in; explicit manual commands remain available.
 
 See ``vscode_ext/README.md`` for the full installation and usage reference.
 '''
@@ -169,10 +171,17 @@ def _in_vscode():
             or "VSCODE_GIT_IPC_HANDLE" in os.environ)
 
 
+def _autoinstall_enabled():
+    'opt-in only: MPYRICALSPACE_VSCODE_AUTOINSTALL=1 enables, MPYRICALSPACE_NO_VSCODE=1 always disables'
+    if os.environ.get("MPYRICALSPACE_NO_VSCODE"):
+        return False
+    return os.environ.get("MPYRICALSPACE_VSCODE_AUTOINSTALL", "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def maybe_autoinstall(background=False):
-    '''First-run, best-effort, silent.  Does nothing outside a VS Code context, and
-    writes a sentinel so it is attempted only once.'''
-    if os.environ.get("MPYRICALSPACE_NO_VSCODE") or os.path.exists(_SENTINEL):
+    '''First-run, best-effort, silent, and opt-in (see _autoinstall_enabled).  Does
+    nothing outside a VS Code context, and writes a sentinel so it is attempted only once.'''
+    if not _autoinstall_enabled() or os.path.exists(_SENTINEL):
         return
     if not _in_vscode() or not find_code():
         return                                          # not VS Code -> touch nothing, don't burn the sentinel

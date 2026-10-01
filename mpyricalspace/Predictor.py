@@ -126,7 +126,10 @@ class Empirical(object):
         '''nativelypackaged_indices=False (default): F10.7/F10.7a from DataManager.
            nativelypackaged_indices=True: F10.7/F10.7a from IRI's own bundled apf107.dat.
            Rz12/IG12 always come from IRI's own ig_rz.dat either way. See models.iri.'''
-        return models.iri(self.time, lats, lons, alts, quiet=quiet, F107=F107, F107a=F107a,
+        return models.iri(self.time, getattr(self, 'lat', None) if lats is None else lats,
+                          getattr(self, 'lon', None) if lons is None else lons,
+                          getattr(self, 'alt', None) if alts is None else alts,
+                          quiet=quiet, F107=F107, F107a=F107a,
                           nativelypackaged_indices=nativelypackaged_indices, NmF2=NmF2, hmF2=hmF2,
                           version=version, compute_Ne=compute_Ne, compute_Te_Ti=compute_Te_Ti,
                           compute_Ni=compute_Ni, rho_m3=rho_m3)
