@@ -222,7 +222,7 @@ python -m mpyricalspace vscode build DIR       # just write the .vsix into DIR
 `doctor` is also exposed as `mpyricalspace.build_info()` -> `{extension:
 None if OK else "<error>"}` and `mpyricalspace.build_report()` (the table as a
 string). `status` / `fetch` / `update` / `config` are covered under
-[Geophysical indices](#geophysical-indices); `vscode` under [Companion VS Code extension](#companion-vs-code-extension).
+[Geophysical indices (and Solar Wind data)](#geophysical-indices-and-solar-wind-data); `vscode` under [Companion VS Code extension](#companion-vs-code-extension).
 
 ## Companion VS Code extension
 
@@ -261,7 +261,7 @@ Check what happened with `python -m mpyricalspace vscode status`; uninstall with
 `code --uninstall-extension mpyricalspace.mpyricalspace-build-status`.
 Disabling or uninstalling the extension leaves the Python library intact.
 
-## Geophysical indices
+## Geophysical indices (and Solar Wind data)
 
 Most models need F10.7 / Kp / Ap / AE. `mpyricalspace.DataManager` supplies them
 transparently — you normally never touch it.
