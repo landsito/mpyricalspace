@@ -277,6 +277,14 @@ python -m mpyricalspace fetch  --from 2024-01-01 --to 2024-06-01 [--kpap-source 
 python -m mpyricalspace update                       # extend every series toward today
 ```
 
+**First run is slow, later runs are not.** The store starts empty, so the first
+call to a model that needs indices downloads them first — this can take a minute
+or more (e.g. `run_scherliessfejer()` for a single day), depending on the span
+requested and the providers' response times. The data are then cached, and
+later calls covering the same dates read them locally. To pay that cost up
+front (or before working offline), pre-fetch the span you need with
+`python -m mpyricalspace fetch --from ... --to ...` as above.
+
 **Optional — your own MongoDB.** If you already run a MongoDB with the
 per-minute index schema (collection `geomagnetic_indices.resolution_1min`),
 point `DataManager` at it and it is used instead of the local store. Give the
