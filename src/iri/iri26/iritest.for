@@ -119,7 +119,7 @@ C
       CHARACTER*3       uni(92),sopt,seopt,ibpopt
       CHARACTER*4       IMZ(8),MAP,xtex,coorv(2),plpa
       CHARACTER*5       ITEXT(8),tsopt
-      CHARACTER*6       pna(92)
+      CHARACTER*7       pna(92)
       CHARACTER*7       popt
       CHARACTER*8       bopt,topt,tiopt,pplas
       CHARACTER*9       pname(7)
@@ -142,8 +142,8 @@ C
      &  'CGMmlt','CGM_AB','CGMm0','CGMm1','CGMm2','CGMm3','CGMm4',
      &  'CGMm5','CGMm6','CGMm7','CGMm8','CGMm9','CGMm10','CGMm11',
      &  'CGMm12','CGMm13','CGMm14','CGMm15','CGMm16','CGMm17','CGMm18',
-     &  'CGMm19','CGMm20','CGMm21','CGMm22','CGMm23','kp_t','dec','L',
-     &  'DIMO','SR300','SS300','HNEA','HNEE','spor_E',' IBP  '/
+     &  'CGMm19','CGMm20','CGMm21','CGMm22','CGMm23','kp','dec','L',
+     &  'DIMO','SR300','SS300','HNEA','HNEE','spor_E','PlaBub'/
       data uni/'m-3','km','m-3','km','m-3','km','m-3','km','km','km',
      &   'm-3','km','K','km',7*'K','km',6*'deg',2*'h',' ','deg',4*' ',
      &   'm-2','%',5*' ','m/s',3*' ','0-1',2*'deg',2*' ','deg','h',
@@ -402,16 +402,20 @@ c
 
       if(PIKTAB.eq.3) then
         print *,'6 Parameters of your choice (number:1-91)'
-        print *,(pna(j),j=1,10)
-        print *,(pna(j),j=11,20)
-        print *,(pna(j),j=21,30)
-        print *,(pna(j),j=31,40)
-        print *,(pna(j),j=41,50)
-        print *,(pna(j),j=51,60)
-        print *,(pna(j),j=61,70)
-        print *,(pna(j),j=71,80)
-        print *,(pna(j),j=81,90)
-        print *,(pna(91))
+        do i5=1,9
+           i5s=(i5-1)*10+1
+           i5e=i5s+9 
+           print *,(pna(j),j=i5s,i5e)
+           enddo
+c        print *,(pna(j),j=11,20)
+c        print *,(pna(j),j=21,30)
+c        print *,(pna(j),j=31,40)
+c        print *,(pna(j),j=41,50)
+c        print *,(pna(j),j=51,60)
+c        print *,(pna(j),j=61,70)
+c        print *,(pna(j),j=71,80)
+c        print *,(pna(j),j=81,90)
+        print *,pna(91),pna(92)
         print *,'e.g. 48,44,45,91,92,58 for:'
         print *,'      spread-F probability [48]'
         print *,'      equatorial vertical ion drift [44]'
