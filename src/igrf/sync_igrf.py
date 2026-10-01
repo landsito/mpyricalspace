@@ -1,7 +1,8 @@
 """
 sync_igrf.py -- downloads/updates each version's igrf<N>.f from
-ngdc.noaa.gov. Runs automatically at build time (meson's run_command(), see
-../meson.build), before compiling any igrfNN extension.
+ngdc.noaa.gov. Runs at build time
+(meson's run_command(), see ../meson.build) only when
+MPYRICALSPACE_SYNC_SOURCES=1 is set -- otherwise run it by hand -- before compiling any igrfNN extension.
 
 Each IGRF version is one self-contained file: coefficients are DATA
 statements, no external data files, no files shared between versions.
@@ -125,4 +126,9 @@ def sync(versions=None, out=sys.stderr):
 
 
 if __name__ == "__main__":
+    # meson passes --build: during a build, sync only when explicitly asked to
+    # (MPYRICALSPACE_SYNC_SOURCES=1), so building never rewrites tracked files;
+    # run by hand (no --build), it always syncs
+    if "--build" in sys.argv[1:] and os.environ.get("MPYRICALSPACE_SYNC_SOURCES") != "1":
+        sys.exit(0)
     sync()

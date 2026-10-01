@@ -47,6 +47,12 @@ cd mpyricalspace
 pip install -e . --no-build-isolation
 ```
 
+Building never downloads model sources: it compiles the copies committed under
+`src/`. Maintainers can check the upstream sites (irimodel.org, NRL, NOAA, ...)
+for updates with `MPYRICALSPACE_SYNC_SOURCES=1 pip install -e . --no-build-isolation`,
+or by running a model's `src/<model>/sync_<model>.py` by hand, then review and
+commit the changes.
+
 ### macOS + conda notes
 
 - If `pkg-config` can't find GSL (conda's `pkg-config` doesn't look in Homebrew's

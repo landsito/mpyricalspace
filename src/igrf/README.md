@@ -13,9 +13,13 @@ src/igrf/
 Versions go back to `igrf09` (IGRF-9). Older releases (`igrf8` and earlier)
 were never published as a standalone `.f` file, only as coefficient tables.
 
-`sync_igrf.py` runs automatically at build time (`meson setup`/`pip install`),
-before compiling any `igrfNN` extension. It only re-downloads a file if it
-changed on ngdc.noaa.gov; no network just means the last synced copy is used.
+`sync_igrf.py` runs only when `MPYRICALSPACE_SYNC_SOURCES=1` is set at build
+time (`meson setup`/`pip install`) -- by default a build uses the committed
+copy as is and never rewrites tracked files; run it by hand (`python
+src/igrf/sync_igrf.py`) to check for updates, then review and commit the
+result. It runs before compiling any `igrfNN` extension. It only
+re-downloads a file if it changed on ngdc.noaa.gov; no network just means
+the last synced copy is used.
 
 ## Two fixes applied on top of NOAA's own files
 
