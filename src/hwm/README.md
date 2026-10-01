@@ -14,8 +14,11 @@ src/hwm/
   _manifest.json    Tracks what sync_hwm.py last fetched.
 ```
 
-`sync_hwm.py` runs automatically at build time (`meson setup`/`pip
-install`), before compiling `hwm14f`/`hwm07f`. hwm93 has no NRL page
+`sync_hwm.py` runs only when `MPYRICALSPACE_SYNC_SOURCES=1` is set at build
+time (`meson setup`/`pip install`) -- by default a build uses the committed
+copy as is and never rewrites tracked files; run it by hand (`python
+src/hwm/sync_hwm.py`) to check for updates, then review and commit the
+result. It runs before compiling `hwm14f`/`hwm07f`. hwm93 has no NRL page
 (coefficients are `DATA` statements in the vendored `.f` itself) and is
 never touched by it.
 

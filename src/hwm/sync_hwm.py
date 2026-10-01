@@ -1,7 +1,8 @@
 """
 sync_hwm.py -- downloads/updates hwm14 and hwm07's own files from
-map.nrl.navy.mil. Runs automatically at build time (meson's
-run_command(), see ../meson.build), before compiling either extension.
+map.nrl.navy.mil. Runs at build time
+(meson's run_command(), see ../meson.build) only when
+MPYRICALSPACE_SYNC_SOURCES=1 is set -- otherwise run it by hand -- before compiling either extension.
 hwm93 has no NRL page (coefficients are DATA statements in the vendored
 .f itself) and is not touched by this script.
 
@@ -133,4 +134,9 @@ def sync(versions=None, out=sys.stderr):
 
 
 if __name__ == "__main__":
+    # meson passes --build: during a build, sync only when explicitly asked to
+    # (MPYRICALSPACE_SYNC_SOURCES=1), so building never rewrites tracked files;
+    # run by hand (no --build), it always syncs
+    if "--build" in sys.argv[1:] and os.environ.get("MPYRICALSPACE_SYNC_SOURCES") != "1":
+        sys.exit(0)
     sync()

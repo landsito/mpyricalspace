@@ -13,8 +13,12 @@ src/iri/
   _manifest.json     Tracks what sync_iri.py last fetched.
 ```
 
-`sync_iri.py` runs automatically at build time (`meson setup`/`pip install`),
-before compiling any `iriXX` extension, for all six versions.
+`sync_iri.py` runs only when `MPYRICALSPACE_SYNC_SOURCES=1` is set at build
+time (`meson setup`/`pip install`) -- by default a build uses the committed
+copy as is and never rewrites tracked files; run it by hand (`python
+src/iri/sync_iri.py`) to check for updates, then review and commit the
+result. It runs before compiling any `iriXX` extension, for all six
+versions.
 
 `common/` files are never duplicated into a version's own folder -- Fortran
 opens files by plain name in the working directory, so

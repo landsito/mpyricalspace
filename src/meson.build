@@ -1,10 +1,12 @@
-# Keep the vendored IRI Fortran/data files in sync with irimodel.org before
+# Opt-in (MPYRICALSPACE_SYNC_SOURCES=1; with --build the script is a no-op
+# otherwise, so a build never rewrites tracked files):
+# keep the vendored IRI Fortran/data files in sync with irimodel.org before
 # any iriXX extension_module() below references them -- see iri/sync_iri.py's
 # own docstring for what this does and does not touch, and why. Failures
 # (no network, site unreachable) are swallowed inside the script itself, so
 # this never blocks a build -- it just leaves the last-synced (committed)
 # copy in place; check: false here is only a second line of defense.
-sync_iri_result = run_command(py3, files('iri/sync_iri.py'), check: false)
+sync_iri_result = run_command(py3, files('iri/sync_iri.py'), '--build', check: false)
 if sync_iri_result.returncode() != 0
   warning('iri/sync_iri.py failed: ' + sync_iri_result.stderr().strip())
 endif
@@ -91,10 +93,11 @@ py3.extension_module('heelis82f',
    subdir: 'mpyricalspace'
 )
 
-# Keep hwm14/hwm07's own files in sync with map.nrl.navy.mil before either
+# Opt-in (MPYRICALSPACE_SYNC_SOURCES=1, see the IRI block above):
+# keep hwm14/hwm07's own files in sync with map.nrl.navy.mil before either
 # extension_module() below references them -- see hwm/sync_hwm.py's own
 # docstring for what this does and does not touch, and why.
-sync_hwm_result = run_command(py3, files('hwm/sync_hwm.py'), check: false)
+sync_hwm_result = run_command(py3, files('hwm/sync_hwm.py'), '--build', check: false)
 if sync_hwm_result.returncode() != 0
   warning('hwm/sync_hwm.py failed: ' + sync_hwm_result.stderr().strip())
 endif
@@ -185,10 +188,11 @@ py3.extension_module('jvdm1',
    subdir: 'mpyricalspace'
 )
 
-# Keep eejm1/eejm2's own files in sync with geomag.colorado.edu before either
+# Opt-in (MPYRICALSPACE_SYNC_SOURCES=1, see the IRI block above):
+# keep eejm1/eejm2's own files in sync with geomag.colorado.edu before either
 # extension_module() below references them -- see eejm/sync_eejm.py's own
 # docstring for what this does and does not touch, and why.
-sync_eejm_result = run_command(py3, files('eejm/sync_eejm.py'), check: false)
+sync_eejm_result = run_command(py3, files('eejm/sync_eejm.py'), '--build', check: false)
 if sync_eejm_result.returncode() != 0
   warning('eejm/sync_eejm.py failed: ' + sync_eejm_result.stderr().strip())
 endif
@@ -232,13 +236,14 @@ py3.extension_module('ppeefm1',
    subdir: 'mpyricalspace'
 )
 
-# Keep the vendored IGRF Fortran source in sync with ngdc.noaa.gov before any
+# Opt-in (MPYRICALSPACE_SYNC_SOURCES=1, see the IRI block above):
+# keep the vendored IGRF Fortran source in sync with ngdc.noaa.gov before any
 # igrfNN extension_module() below references it -- see igrf/sync_igrf.py's own
 # docstring for what this does and does not touch, and why. Failures (no
 # network, site unreachable) are swallowed inside the script itself, so this
 # never blocks a build -- it just leaves the last-synced (committed) copy in
 # place; check: false here is only a second line of defense.
-sync_igrf_result = run_command(py3, files('igrf/sync_igrf.py'), check: false)
+sync_igrf_result = run_command(py3, files('igrf/sync_igrf.py'), '--build', check: false)
 if sync_igrf_result.returncode() != 0
   warning('igrf/sync_igrf.py failed: ' + sync_igrf_result.stderr().strip())
 endif

@@ -13,8 +13,11 @@ src/eejm/
   _manifest.json    Tracks what sync_eejm.py last fetched.
 ```
 
-`sync_eejm.py` runs automatically at build time (`meson setup`/`pip
-install`), before compiling `eejm1`/`eejm2`. Each version ships as one
+`sync_eejm.py` runs only when `MPYRICALSPACE_SYNC_SOURCES=1` is set at build
+time (`meson setup`/`pip install`) -- by default a build uses the committed
+copy as is and never rewrites tracked files; run it by hand (`python
+src/eejm/sync_eejm.py`) to check for updates, then review and commit the
+result. It runs before compiling `eejm1`/`eejm2`. Each version ships as one
 archive (eejm1: a .zip, eejm2: a .tar.gz); a Last-Modified/Content-Length
 HEAD check on the archive itself decides whether to re-download.
 
