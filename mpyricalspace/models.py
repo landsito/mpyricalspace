@@ -695,22 +695,22 @@ def _igrz_end_year(path):
 
 
 def _iri_srcdirs(name):
-    '''Source directories for IRI version <name>: the installed package data (meson's
-       install_data() already flattens iri/common/ + iri/<name>/ together there, so it's
-       just one dir) or, for an editable/source-tree install, BOTH iri/common/ (CCIR/URSI/
-       apf107/ig_rz, shared across every version) and iri/<name>/ (that version's own
-       .for/.dat) -- kept as two separate directories on disk (no symlinks/copies between
-       them) so iri/<name>/ only ever holds files that actually belong to that version;
-       _iri_workdir() below is what flattens them, into the cache, not the source tree.'''
-    installed = os.path.join(DIR, '_data', name)
-    if os.path.isdir(installed):
-        return [os.path.abspath(installed)]
-    dirs = [os.path.join(DIR, '..', 'src', 'iri', 'common'), os.path.join(DIR, '..', 'src', 'iri', name)]
-    dirs = [os.path.abspath(d) for d in dirs if os.path.isdir(d)]
-    if not dirs:
-        raise FileNotFoundError("mpyricalspace: data files for %r not found (looked in "
-                                 "%s/_data/ and ../src/iri/{common,%s}/)" % (name, DIR, name))
-    return dirs
+    '''Source directories for IRI version <name>: iri_common/ (CCIR/URSI/apf107/ig_rz,
+       shared across every version) and <name>/ (that version's own .for/.dat) -- from the
+       installed package data (_data/iri_common/ + _data/<name>/; meson installs each
+       common file once, see src/meson.build) or, for an editable/source-tree install,
+       from src/iri/common/ + src/iri/<name>/. Kept as separate directories on disk (no
+       symlinks/copies between them) so <name>/ only ever holds files that actually belong
+       to that version; _iri_workdir() below is what flattens them, into the cache, not
+       the source tree.'''
+    for root, common in ((os.path.join(DIR, '_data'), 'iri_common'),
+                         (os.path.join(DIR, '..', 'src', 'iri'), 'common')):
+        dirs = [os.path.join(root, common), os.path.join(root, name)]
+        if all(os.path.isdir(d) for d in dirs):
+            return [os.path.abspath(d) for d in dirs]
+    raise FileNotFoundError("mpyricalspace: data files for %r not found (looked in "
+                             "%s/_data/{iri_common,%s}/ and ../src/iri/{common,%s}/)"
+                             % (name, DIR, name, name))
 
 
 def _iri_workdir(version, need_year=0):
@@ -852,6 +852,13 @@ def iri(time, lat, lon, alt, quiet=True, F107=None, F107a=None, nativelypackaged
         Ti[:] = Te[:] = np.nan
     niO, niH, niHe, niO2, niNO = (DATA[:, i] for i in range(4, 9))
     NMF2, HMF2, NMF1, HMF1, TEC = OARR[:, 0], OARR[:, 1], OARR[:, 2], OARR[:, 3], OARR[:, 36]
+
+    # NmF2 is computed at every altitude, so a -1 there means IRI itself failed (typically
+    # a missing ccir/ursi/ig_rz/apf107 file in wd) -- the Fortran only prints about it
+    bad = int(np.count_nonzero(NMF2 <= 0))
+    if bad:
+        warnings.warn("IRI-%s returned fill values (-1) at %d of %d points; check that its data "
+                      "files are present in %s" % (version, bad, n, wd), RuntimeWarning)
 
     if not rho_m3:
         ne, niO, niH, niHe, niO2, niNO, NMF2, NMF1 = (a * 1e-6 for a in (ne, niO, niH, niHe, niO2, niNO, NMF2, NMF1))

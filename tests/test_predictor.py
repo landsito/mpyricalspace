@@ -48,7 +48,7 @@ def test_igrf14_secular_variation_extrapolation():
     o = Empirical()
     o.set_time([datetime(2027, 1, 1)])
     ds = o.run_igrf(version=14, lats=-12., lons=-77., alts=250.)
-    assert np.isfinite(float(ds.B.data)) and 1e-5 < float(ds.B.data) < 6e-5
+    assert np.isfinite(ds.B.item()) and 1e-5 < ds.B.item() < 6e-5
 
 
 def test_iri_no_indices(obj):
@@ -66,10 +66,10 @@ def test_iri_datamanager_is_default(version):
     o.set_time([datetime(2013, 6, 15, 12)])
     native = o.run_iri(alts=300., lats=-12., lons=-77., version=version, nativelypackaged_indices=True)
     default = o.run_iri(alts=300., lats=-12., lons=-77., version=version)
-    assert 1e10 < float(default.ne.data) < 1e13
+    assert 1e10 < default.ne.item() < 1e13
     # both are real F10.7 sources for the same date -- not asserting a difference, just that
     # the default path runs standalone (DataManager, not the bundled file) and returns sane output
-    assert 300 < float(native.Te.data) < 6000
+    assert 300 < native.Te.item() < 6000
 
 
 @pytest.mark.parametrize("version", [2012, 2016, 2020, 2026])
@@ -77,8 +77,8 @@ def test_iri_versions(version):
     o = Empirical()
     o.set_time([datetime(2013, 6, 15, 12)])                               # in range for all four
     ds = o.run_iri(alts=300., lats=-12., lons=-77., version=version)
-    assert 1e10 < float(ds.ne.data) < 1e13
-    assert 300 < float(ds.Te.data) < 6000
+    assert 1e10 < ds.ne.item() < 1e13
+    assert 300 < ds.Te.item() < 6000
 
 
 @pytest.mark.parametrize("version", [2016, 2020, 2026])
@@ -90,9 +90,9 @@ def test_iri_recent_date(version):
     o = Empirical()
     o.set_time([datetime(2026, 6, 15, 12)])
     ds = o.run_iri(alts=300., lats=-12., lons=-77., version=version)
-    assert 1e10 < float(ds.ne.data) < 1e13
+    assert 1e10 < ds.ne.item() < 1e13
     ds_native = o.run_iri(alts=300., lats=-12., lons=-77., version=version, nativelypackaged_indices=True)
-    assert 1e10 < float(ds_native.ne.data) < 1e13
+    assert 1e10 < ds_native.ne.item() < 1e13
 
 
 def test_iri_external_f107():
@@ -102,14 +102,14 @@ def test_iri_external_f107():
     o.set_time([datetime(2013, 6, 15, 12)])
     lo = o.run_iri(alts=600., lats=-12., lons=-77., F107=70., F107a=70.)
     hi = o.run_iri(alts=600., lats=-12., lons=-77., F107=210., F107a=205.)
-    assert float(hi.ne.data) > float(lo.ne.data) * 1.15
-    assert float(hi.Te.data) > float(lo.Te.data) + 100
-    assert abs(float(hi.NMF2.data) - float(lo.NMF2.data)) / float(lo.NMF2.data) < 0.02
+    assert hi.ne.item() > lo.ne.item() * 1.15
+    assert hi.Te.item() > lo.Te.item() + 100
+    assert abs(hi.NMF2.item() - lo.NMF2.item()) / lo.NMF2.item() < 0.02
 
 
 def test_iri_bad_version(obj):
     with pytest.raises(ValueError):
-        obj.run_iri(alts=300., lats=0., lons=0., version=2007)
+        obj.run_iri(alts=300., lats=0., lons=0., version=1999)
 
 
 def test_iri_leaves_cwd_untouched(obj):
@@ -120,9 +120,11 @@ def test_iri_leaves_cwd_untouched(obj):
 
 def test_model_datadirs_exist():
     from mpyricalspace import models
-    for name in ('hwm14', 'hwm07', 'hltwim', 'eejm1', 'eejm2', 'eefm1', 'ppeefm1',
-                 'iri12', 'iri16', 'iri20', 'iri26'):
+    for name in ('hwm14', 'hwm07', 'hltwim', 'eejm1', 'eejm2', 'eefm1', 'ppeefm1'):
         assert os.path.isdir(models._datadir(name))
+    for name in ('iri01', 'iri07', 'iri12', 'iri16', 'iri20', 'iri26'):
+        common, own = models._iri_srcdirs(name)
+        assert os.path.isfile(os.path.join(common, 'ccir15.asc')) and os.path.isdir(own)
     assert os.environ.get('HWMPATH') == models._datadir('hwm14')
 
 
@@ -131,8 +133,8 @@ def test_eej_reference_row():
     o = Empirical()
     o.set_time([datetime(2024, 3, 20, 12)])
     ds = o.run_eej(version=1, lon=90., flux=180., slts=[10.5], doys=[79])
-    assert float(ds.eej) == pytest.approx(0.155647, abs=1e-4)
-    assert float(ds.eej_sigma) == pytest.approx(0.029475, abs=1e-4)
+    assert ds.eej.item() == pytest.approx(0.155647, abs=1e-4)
+    assert ds.eej_sigma.item() == pytest.approx(0.029475, abs=1e-4)
 
 
 @pytest.mark.parametrize("version", [1, 2])
@@ -149,7 +151,7 @@ def test_eej_outside_lt_window_is_nan():
     o = Empirical()
     o.set_time([datetime(2024, 3, 20, 12)])
     ds = o.run_eej(version=2, lon=0., flux=120., doys=[80], slts=[2.0], lunars=[12.0])
-    assert np.isnan(float(ds.eej))
+    assert np.isnan(ds.eej.item())
 
 
 @pytest.mark.parametrize("model", ["champ", "oersted", "sac-c"])
@@ -182,7 +184,7 @@ def test_eef_runs():
     o.set_time([datetime(2024, 3, 20, 12)])
     ds = o.run_eef(lon=90., flux=100., slts=[10.5], doys=[266], lunars=[12.5])
     assert set(ds.data_vars) == {"eef", "eef_sigma"}
-    assert 0.05 < float(ds.eef) < 5.0 and float(ds.eef_sigma) > 0
+    assert 0.05 < ds.eef.item() < 5.0 and ds.eef_sigma.item() > 0
 
 
 def test_fortran_batch_drivers_present():
@@ -217,6 +219,29 @@ def test_vscode_ext_vsix_builds(tmp_path):
     assert "extension/modules.json" in names
 
 
+@pytest.mark.parametrize("env, expect", [
+    ({}, False),                                                          # default: off
+    ({"MPYRICALSPACE_VSCODE_AUTOINSTALL": "1"}, True),
+    ({"MPYRICALSPACE_VSCODE_AUTOINSTALL": "1", "MPYRICALSPACE_NO_VSCODE": "1"}, False),
+])
+def test_vscode_autoinstall_is_opt_in(monkeypatch, tmp_path, env, expect):
+    '''importing mpyricalspace must not touch the editor unless explicitly opted in'''
+    from mpyricalspace import _vscode
+    monkeypatch.delenv("MPYRICALSPACE_NO_VSCODE", raising=False)
+    monkeypatch.delenv("MPYRICALSPACE_VSCODE_AUTOINSTALL", raising=False)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setenv("TERM_PROGRAM", "vscode")
+    monkeypatch.setattr(_vscode, "_SENTINEL", str(tmp_path / "vscode-ext.tried"))
+    monkeypatch.setattr(_vscode, "_STATE", str(tmp_path))
+    monkeypatch.setattr(_vscode, "_LOG", str(tmp_path / "vscode-ext.log"))
+    monkeypatch.setattr(_vscode, "find_code", lambda *a, **k: "/usr/bin/true")
+    calls = []
+    monkeypatch.setattr(_vscode, "install", lambda **kw: calls.append(kw))
+    _vscode.maybe_autoinstall(background=False)
+    assert bool(calls) is expect
+
+
 def test_hltwim_reference_row():
     '''close to the checkhltwim.f90 reference (day 10, ut 21, kp 3, 65N 215E).
        ~0.3% off it: our initalf() bounds fix changes the coordinate transform
@@ -225,11 +250,11 @@ def test_hltwim_reference_row():
     o = Empirical()
     o.set_time([datetime(2020, 1, 1)])
     ds = o.run_hltwim(kp=3., lat=65., lon=215., ut=21., doy=10)
-    assert float(ds.v) == pytest.approx(45.492, abs=0.5)       # geographic meridional
-    assert float(ds.u) == pytest.approx(-53.303, abs=0.5)      # geographic zonal
-    assert float(ds.mv) == pytest.approx(20.675, abs=0.5)      # QD meridional
-    assert float(ds.mu) == pytest.approx(-59.953, abs=0.5)     # QD zonal
-    assert 55 < float(ds.mlat) < 75 and 0 <= float(ds.mlt) < 24  # 65N 215E ~ auroral, evening
+    assert ds.v.item() == pytest.approx(45.492, abs=0.5)       # geographic meridional
+    assert ds.u.item() == pytest.approx(-53.303, abs=0.5)      # geographic zonal
+    assert ds.mv.item() == pytest.approx(20.675, abs=0.5)      # QD meridional
+    assert ds.mu.item() == pytest.approx(-59.953, abs=0.5)     # QD zonal
+    assert 55 < ds.mlat.item() < 75 and 0 <= ds.mlt.item() < 24  # 65N 215E ~ auroral, evening
 
 
 def test_hltwim_low_latitude_is_nan(obj):
@@ -307,7 +332,7 @@ def test_jvdm1_finds_its_coefficients_from_any_directory(tmp_path, monkeypatch):
     from mpyricalspace import models, jvdm1 as _jv
     monkeypatch.chdir(tmp_path)                                  # nothing jvdm1-related in this directory
     ds = models.jvdm1_drift([datetime(2024, 5, 11, 17)], f107=100., f107a=100.)        # 12 LT at Jicamarca
-    assert 5. < float(ds.qvdrift_150km) < 40. and float(ds.qvdrift_150km_error) > 0
+    assert 5. < ds.qvdrift_150km.item() < 40. and ds.qvdrift_150km_error.item() > 0
     data = open(_jv.__file__, 'rb').read()
     assert b'/drift_mean_coeffs' not in data and b'/drift_stddev_coeffs' not in data   # no baked-in path
 
@@ -441,7 +466,7 @@ def test_msis_nativelypackaged_indices():
     default = o.run_msis()
     native  = o.run_msis(nativelypackaged_indices=True)
     for ds in (default, native):
-        assert np.isfinite(float(ds.rho.data)) and float(ds.rho.data) > 0
+        assert np.isfinite(ds.rho.item()) and ds.rho.item() > 0
 
 
 def test_manoj_maus_ppeefm1(monkeypatch):

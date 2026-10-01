@@ -40,7 +40,7 @@ if a.cmd == 'vscode':
         raise SystemExit(0 if _vscode.install() else 1)
     raise SystemExit
 
-# first-run, best-effort, silent -- offer the VS Code extension (see mpyricalspace/_vscode.py)
+# opt-in, first-run, best-effort, silent -- offer the VS Code extension (see mpyricalspace/_vscode.py)
 try:
     from mpyricalspace._vscode import maybe_autoinstall
     maybe_autoinstall()

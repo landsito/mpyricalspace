@@ -94,9 +94,9 @@ def test_drivers_from_datamanager(store):
     a = models.weimer05(T0, [75., 80.], [6., 12.], res='1min', avg=None, tilt=0)     # instantaneous 1-min values
     bz = float(store.get_values([T0], 'bz')[0])
     b = models.weimer05(T0, [75., 80.], [6., 12.], by=1., bz=bz, vsw=500., nsw=7., tilt=0)
-    assert np.array_equal(a.epot.values, b.epot.values) and float(a.vsw) == 500.
+    assert np.array_equal(a.epot.values, b.epot.values) and a.vsw.item() == 500.
     five = models.weimer05(T0, [75., 80.], [6., 12.], res='5min', avg=None, tilt=0)  # the 5-min series
-    assert (float(five.by), float(five.vsw)) == (2.0, 600.)
+    assert (five.by.item(), five.vsw.item()) == (2.0, 600.)
 
 
 def test_default_drivers_are_the_20min_mean_of_the_5min_series(store):
@@ -107,28 +107,28 @@ def test_default_drivers_are_the_20min_mean_of_the_5min_series(store):
     store._views()
     ds = models.weimer05(T0, [80.], [12.], tilt=0)                                # no res / avg: the defaults
     i = list(t5).index(pd.Timestamp(T0))
-    assert float(ds.bz) == pytest.approx(np.mean([i - 3, i - 2, i - 1, i]))         # samples 11:45, 11:50, 11:55, 12:00
+    assert ds.bz.item() == pytest.approx(np.mean([i - 3, i - 2, i - 1, i]))         # samples 11:45, 11:50, 11:55, 12:00
     explicit = models.weimer05(T0, [80.], [12.], res='5min', avg=20, tilt=0)
-    assert float(explicit.bz) == float(ds.bz) and float(models.weimer05(T0, [80.], [12.], avg=None, tilt=0).bz) == float(i)
+    assert explicit.bz.item() == ds.bz.item() and float(models.weimer05(T0, [80.], [12.], avg=None, tilt=0).bz) == float(i)
 
 
 def test_trailing_average(store):
     ds = models.weimer05(T0, [80.], [12.], res='1min', avg=10, tilt=0)
     expect = np.mean(store.get_history([T0], 'bz', [-9, 0], pd.Timedelta(minutes=1).to_pytimedelta())[0])
-    assert float(ds.bz) == pytest.approx(expect)
+    assert ds.bz.item() == pytest.approx(expect)
 
 
 def test_lag_shifts_the_averaging_window(store):
     ds = models.weimer05(T0, [80.], [12.], res='1min', avg=5, lag=10, tilt=0)  # mean of the 5 min ending 10 min before
     expect = np.mean(store.get_history([T0], 'bz', [-14, -10], pd.Timedelta(minutes=1).to_pytimedelta())[0])
-    assert float(ds.bz) == pytest.approx(expect)
+    assert ds.bz.item() == pytest.approx(expect)
     one = models.weimer05(T0, [80.], [12.], res='1min', avg=None, lag=10, tilt=0)   # no avg: the value 10 min earlier
-    assert float(one.bz) == pytest.approx(float(store.get_values([T0 - pd.Timedelta(minutes=10).to_pytimedelta()], 'bz')[0]))
+    assert one.bz.item() == pytest.approx(float(store.get_values([T0 - pd.Timedelta(minutes=10).to_pytimedelta()], 'bz')[0]))
 
 
 def test_no_data_gives_nan_not_error(store):
     ds = models.weimer05(datetime(2024, 5, 11, 3), [80.], [12.], tilt=0)          # nothing stored then
-    assert np.isnan(ds.epot.values).all() and np.isnan(float(ds.by))
+    assert np.isnan(ds.epot.values).all() and np.isnan(ds.by.item())
 
 
 # ------------------------------------------------------------------------------- dipole tilt

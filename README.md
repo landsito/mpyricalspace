@@ -233,18 +233,32 @@ compiled wrappers individually in separate Python processes and tints each
 have no check. A status-bar item shows the `n/m` count. Checks run one at a time,
 without importing `mpyricalspace`, starting builds, or modifying package files.
 
-Because Python wheels have no post-install hook, installation is *attempted*,
-once, best-effort, on the first `python -m mpyricalspace ...` call or
-`import mpyricalspace` **from a VS Code terminal**. Failures are logged silently to
-`~/.cache/mpyricalspace/vscode-ext.log`; a sentinel prevents retries, so existing
-extensions are not automatically updated. Install (or reinstall) by hand with
-`python -m mpyricalspace vscode`, then fully quit and reopen VS Code the first time.
-That manual package command can trigger an editable rebuild; see the
-[extension README](mpyricalspace/vscode_ext/README.md) for building and installing
-the VSIX without importing the package.
+**The extension is never installed unless you ask for it.** Importing or running
+`mpyricalspace` does not touch your editor by default. To get it, either:
 
-Opt out of the automatic installation attempt with `MPYRICALSPACE_NO_VSCODE=1`;
-uninstall with `code --uninstall-extension mpyricalspace.mpyricalspace-build-status`.
+- **Install it by hand** (recommended):
+
+  ```bash
+  python -m mpyricalspace vscode            # build the VSIX and install it with `code`
+  ```
+
+  then fully quit and reopen VS Code the first time. This package command can
+  trigger an editable rebuild; see the
+  [extension README](mpyricalspace/vscode_ext/README.md) for building and installing
+  the VSIX without importing the package.
+
+- **Or opt in to automatic installation** by setting
+  `MPYRICALSPACE_VSCODE_AUTOINSTALL=1` (e.g. in your shell profile). Python wheels
+  have no post-install hook, so with this set the installation is *attempted* once,
+  best-effort, on the first `python -m mpyricalspace ...` call or
+  `import mpyricalspace` **from a VS Code terminal**, and only if the `code` CLI is
+  available. Failures are logged silently to `~/.cache/mpyricalspace/vscode-ext.log`;
+  a sentinel prevents retries, so existing extensions are not automatically updated
+  (delete `~/.cache/mpyricalspace/vscode-ext.tried` to retry).
+  `MPYRICALSPACE_NO_VSCODE=1` overrides this and disables it.
+
+Check what happened with `python -m mpyricalspace vscode status`; uninstall with
+`code --uninstall-extension mpyricalspace.mpyricalspace-build-status`.
 Disabling or uninstalling the extension leaves the Python library intact.
 
 ## Geophysical indices

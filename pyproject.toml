@@ -66,6 +66,12 @@ local_scheme = "node-and-date"
 parentdir_prefix_version = "mpyricalspace-"
 fallback_version = "0.0+UNKNOWN"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# don't put the repo root on sys.path: its uncompiled mpyricalspace/ would shadow
+# an installed (non-editable) package and fail on the missing extension modules
+addopts = "--import-mode=importlib"
+
 [tool.cibuildwheel]
 # skip Python <3.10
 # skip 32 bit windows and linux builds for lack of numpy wheels
