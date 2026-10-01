@@ -107,6 +107,22 @@ def test_iri_external_f107():
     assert abs(hi.NMF2.item() - lo.NMF2.item()) / lo.NMF2.item() < 0.02
 
 
+@pytest.mark.parametrize("year, quiet", [(1990, True), (2003, True), (2024, True),
+                                         (2003, False)])
+def test_iri2001_runs(year, quiet):
+    '''IRI-2001 needs the vendored igrf00.dat/igrf00s.dat (any date >= 1995) and ap.dat
+       (storm model); a missing one makes the Fortran STOP/abort the whole process, so
+       run it in a child process to turn that into a failure instead of killing pytest.'''
+    import subprocess, sys
+    code = ("from datetime import datetime; from mpyricalspace import models; "
+            "ds = models.iri([datetime(%d, 5, 11, 12)], -12., -77., 300., version=2001, quiet=%s); "
+            "print('NE', ds.ne.item())" % (year, quiet))
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=600)
+    ne = [l for l in r.stdout.splitlines() if l.startswith('NE ')]
+    assert r.returncode == 0 and ne, "IRI-2001 died (rc=%s): %s" % (r.returncode, r.stderr[-500:])
+    assert 1e10 < float(ne[0].split()[1]) < 1e13
+
+
 def test_iri_bad_version(obj):
     with pytest.raises(ValueError):
         obj.run_iri(alts=300., lats=0., lons=0., version=1999)

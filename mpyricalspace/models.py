@@ -722,13 +722,17 @@ def _iri_workdir(version, need_year=0):
     for src in _iri_srcdirs(_IRI_NAME[version]):
         for f in os.listdir(src):
             d, s = os.path.join(dst, f), os.path.join(src, f)
-            if os.path.exists(d):
+            if f in ('ig_rz.dat', 'apf107.dat'):              # refreshed in place below, keep
+                if not os.path.exists(d):
+                    shutil.copy2(s, d)
                 continue
-            if f in ('ig_rz.dat', 'apf107.dat'):
-                shutil.copy2(s, d)
-            else:
-                try:    os.link(s, d)
-                except OSError: shutil.copy2(s, d)
+            if os.path.exists(d):
+                ss, sd = os.stat(s), os.stat(d)
+                if (ss.st_size, int(ss.st_mtime)) == (sd.st_size, int(sd.st_mtime)):
+                    continue                                  # same hard link, or copy2'd copy
+                os.remove(d)                                  # stale copy from an older install
+            try:    os.link(s, d)
+            except OSError: shutil.copy2(s, d)
     if _igrz_end_year(os.path.join(dst, 'ig_rz.dat')) < need_year:
         from mpyricalspace.DataManager import fetch_iri_indices
         try:

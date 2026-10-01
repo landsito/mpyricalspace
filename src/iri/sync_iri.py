@@ -76,11 +76,18 @@ VERSIONS = {
         "cira.for", "igrf.for", "iridreg.for", "irifun.for", "irisub.for",
         "iritec.for", "iritest.for", "igrf2010.dat", "igrf2010s.dat",
     ] + [f"dgrf{y}.dat" for y in range(1945, 2006, 5)]),
+    # IRI-2001: irimodel.org replaced this version's IGRF-2000 files with
+    # IGRF-11 ones (dgrf00/dgrf05/igrf10/igrf10s, Apr 2013) without updating
+    # igrf.for, which still opens igrf00.dat/igrf00s.dat -- and it no longer
+    # serves the ap.dat irifun.for's APF() opens for the storm model. Those
+    # three originals are vendored in iri01/ instead (see ../README.md,
+    # "IRI-2001 original data files") and deliberately not listed here, so
+    # this script never touches them; the unused IGRF-11 files are not synced.
     "iri01": ("IRI-2001", [
         "cira.for", "igrf.for", "iridreg.for", "irifun.for", "irisub.for",
-        "iritec.for", "iritest.for", "igrf10.dat", "igrf10s.dat",
+        "iritec.for", "iritest.for",
     ] + [f"dgrf{y}.dat" for y in
-         ("45", "50", "55", "60", "65", "70", "75", "80", "85", "90", "95", "00", "05")]),
+         ("45", "50", "55", "60", "65", "70", "75", "80", "85", "90", "95")]),
 }
 
 # (version, filename) -> [(old substring, new substring), ...], applied in order,
