@@ -20,9 +20,10 @@ from mpyricalspace import rocsatf as _rocsat
 from mpyricalspace import scherliessfejerf as _sf
 from mpyricalspace import hwm14f as _hwm14, hwm07f as _hwm07, hwm93f as _hwm93
 from mpyricalspace import hltwimf as _hltwim
-from mpyricalspace import jvdm1 as _jvdm
-from mpyricalspace import eejm1 as _eejm1, eejm2 as _eejm2, eefm1 as _eefm1
-from mpyricalspace import ppeefm1 as _ppeefm1
+from mpyricalspace._build import optional_extension   # GSL-linked: skipped at build time if GSL is missing
+_jvdm = optional_extension('jvdm1')
+_eejm1, _eejm2, _eefm1 = (optional_extension(e) for e in ('eejm1', 'eejm2', 'eefm1'))
+_ppeefm1 = optional_extension('ppeefm1')
 from mpyricalspace import igrf14f, igrf13f, igrf12f, igrf11f, igrf10f, igrf09f, iri26f, iri20f, iri16f, iri12f, iri07f, iri01f
 from mpyricalspace import weimer05f as _w05
 from mpyricalspace import heelis82f as _h82

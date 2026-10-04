@@ -9,9 +9,13 @@ climatological empirical models available.
 A pip-installable release is planned; for now install from a source checkout.
 Build-time system requirements (the models are Fortran/C extensions):
 
-- a Fortran compiler — `gfortran` (`brew install gcc` / `apt-get install gfortran`)
-- **GSL** — used by the JVDM / EEJ / EEF (Alken) models:
-  `brew install gsl` / `apt-get install libgsl-dev` / `conda install -c conda-forge gsl`
+- a Fortran and a C compiler — `gfortran` + `gcc`/`clang` (`brew install gcc` / `apt-get install gfortran`)
+- **GSL** (optional) — needed only by P. Alken's C models (JVDM, EEJM1/EEJM2, EEFM1, PPEEFM1):
+  `brew install gsl pkg-config` / `apt-get install libgsl-dev pkg-config` /
+  `conda install -c conda-forge gsl pkg-config`.
+  If GSL is not found, those five models are skipped and everything else still
+  builds and installs; calling one of them then raises an `ImportError` that says
+  how to fix it (install GSL, then reinstall).
 
 Then:
 
@@ -33,8 +37,9 @@ connectivity just means the bundled copy is used as-is. The index backend
 (F10.7/Kp/Ap/AE, separate from this) is chosen at *runtime*, not at install time.
 
 Check the build with `python -m mpyricalspace doctor` — a table with one row
-per compiled Fortran extension (a partial build leaves some missing). See
-[Command line](#command-line) below for the full set of subcommands.
+per compiled extension (Fortran or C). A build without GSL shows `20/25
+extensions OK`, with the five Alken models marked `FAIL` and the command to fix
+it. See [Command line](#command-line) below for the full set of subcommands.
 
 ### Editable install (for development)
 
@@ -53,6 +58,27 @@ for updates with `MPYRICALSPACE_SYNC_SOURCES=1 pip install -e . --no-build-isola
 or by running a model's `src/<model>/sync_<model>.py` by hand, then review and
 commit the changes.
 
+### Linux / JupyterHub notes
+
+- Minimal images (JupyterHub, Docker) often have `gcc`/`gfortran` but neither GSL
+  nor `pkg-config`, and no `sudo`. Install both into the active conda env and
+  reinstall:
+
+  ```bash
+  conda install -c conda-forge gsl pkg-config
+  pip install --force-reinstall --no-deps --no-cache-dir .
+  ```
+
+- If the build succeeds but `import mpyricalspace.jvdm1` fails with
+  `libgsl.so.NN: cannot open shared object file`, the extension cannot find
+  conda's GSL at runtime. Rebuild with an rpath to the env:
+
+  ```bash
+  LDFLAGS="-Wl,-rpath,$CONDA_PREFIX/lib" pip install --force-reinstall --no-deps --no-cache-dir .
+  ```
+
+  (or `export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH` as a stopgap).
+
 ### macOS + conda notes
 
 - If `pkg-config` can't find GSL (conda's `pkg-config` doesn't look in Homebrew's
@@ -61,6 +87,9 @@ commit the changes.
   ```bash
   export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig      # Apple Silicon
   ```
+
+  (Without `pkg-config` the build also tries CMake's `FindGSL` and the compiler's
+  default search paths; if all fail, the Alken models are skipped — see above.)
 
 - If linking the static Fortran libs fails with `ar` / `ranlib` errors (conda's
   binutils vs Apple's linker), force Apple's toolchain with the bundled native file:

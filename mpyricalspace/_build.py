@@ -45,6 +45,36 @@ EXTENSIONS = {
     "iri01f":           ("IRI-2001 ionosphere",                              "iri/iri01"),
 }
 
+# C extensions that link GSL. src/meson.build skips them when GSL is not found,
+# so the rest of the package still installs; using one then raises GSL_HINT.
+GSL_EXTENSIONS = ("jvdm1", "eejm1", "eejm2", "eefm1", "ppeefm1")
+GSL_HINT = (
+    "GSL (GNU Scientific Library) was not found when mpyricalspace was built.\n"
+    "Install GSL (and pkg-config), then reinstall mpyricalspace:\n"
+    "    conda install -c conda-forge gsl pkg-config      # or: apt-get install libgsl-dev pkg-config\n"
+    "                                                     # or: brew install gsl pkg-config\n"
+    "    pip install --force-reinstall --no-deps --no-cache-dir .")
+
+
+class _MissingExtension:
+    '''Stands in for an extension that did not build: importing mpyricalspace works,
+    touching the model raises an ImportError that says why and how to fix it.'''
+    def __init__(self, ext, err):
+        self._ext, self._err = ext, err
+
+    def __getattr__(self, attr):
+        label = EXTENSIONS[self._ext][0]
+        why = GSL_HINT if self._ext in GSL_EXTENSIONS else "import failed: %s" % self._err
+        raise ImportError("mpyricalspace.%s (%s) was not compiled. %s" % (self._ext, label, why))
+
+
+def optional_extension(ext):
+    '''``mpyricalspace.<ext>`` if it loads, else a stub that raises a helpful ImportError on use.'''
+    try:
+        return importlib.import_module("mpyricalspace." + ext)
+    except ImportError as e:
+        return _MissingExtension(ext, e)
+
 
 def build_info():
     '''Import every compiled extension on its own. Returns an ordered dict
@@ -71,6 +101,9 @@ def build_report(info=None):
     ok = sum(v is None for v in info.values())
     lines.append("")
     lines.append("  %d/%d extensions OK" % (ok, len(EXTENSIONS)))
+    if any(info.get(e) is not None for e in GSL_EXTENSIONS):
+        lines.append("")
+        lines.append("  %s were not compiled. %s" % (", ".join(GSL_EXTENSIONS), GSL_HINT))
     return "\n".join(lines)
 
 

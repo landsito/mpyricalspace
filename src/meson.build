@@ -174,7 +174,23 @@ py3.extension_module('hltwimf',
 )
 
 m_dep = cc.find_library('m', required : true)
-gsl_dep = dependency('gsl')            # external: brew install gsl / apt install libgsl-dev / conda install gsl
+# GSL is optional: without it the five Alken C models below are skipped and the
+# rest of the package still builds (mpyricalspace/_build.py tells the user at import).
+gsl_dep = dependency('gsl', required: false)   # brew install gsl / apt install libgsl-dev / conda install gsl
+if not gsl_dep.found()
+  # no pkg-config (e.g. minimal JupyterHub/Docker images): ask the compiler directly
+  gsl_lib = cc.find_library('gsl', has_headers: ['gsl/gsl_vector.h', 'gsl/gsl_bspline.h'], required: false)
+  gslcblas_lib = cc.find_library('gslcblas', required: false)
+  if gsl_lib.found() and gslcblas_lib.found()
+    gsl_dep = declare_dependency(dependencies: [gsl_lib, gslcblas_lib])
+  endif
+endif
+if not gsl_dep.found()
+  warning('GSL not found: skipping jvdm1, eejm1, eejm2, eefm1, ppeefm1. ' +
+          'Install GSL (+ pkg-config) and reinstall to build them.')
+endif
+
+if gsl_dep.found()
 
 py3.extension_module('jvdm1',
    ['jvdm1/jvdm1.c',
@@ -187,6 +203,7 @@ py3.extension_module('jvdm1',
    install: true,
    subdir: 'mpyricalspace'
 )
+endif
 
 # Opt-in (MPYRICALSPACE_SYNC_SOURCES=1, see the IRI block above):
 # keep eejm1/eejm2's own files in sync with geomag.colorado.edu before either
@@ -197,6 +214,7 @@ if sync_eejm_result.returncode() != 0
   warning('eejm/sync_eejm.py failed: ' + sync_eejm_result.stderr().strip())
 endif
 
+if gsl_dep.found()
 # P. Alken's Equatorial Electrojet (v1, v2) and Equatorial Electric Field models.
 # Each *.c wrapper (L. Navarro) batch-loops the calc routines behind one numpy call.
 py3.extension_module('eejm1',
@@ -235,6 +253,7 @@ py3.extension_module('ppeefm1',
    install: true,
    subdir: 'mpyricalspace'
 )
+endif  # gsl_dep.found()
 
 # Opt-in (MPYRICALSPACE_SYNC_SOURCES=1, see the IRI block above):
 # keep the vendored IGRF Fortran source in sync with ngdc.noaa.gov before any
