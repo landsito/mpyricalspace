@@ -94,8 +94,12 @@ ds = obj.run_weimer05(mlat, mlt, res='1min', avg=45, lag=10)    # the recipe the
 ds = models.weimer05(times, track_mlat, track_mlt)
 ```
 
-`examples/plot_weimer05_fig02.py` draws the nine polar maps of the electric potential of 2005a Figure 2 (IMF of
-5 nT at nine clock angles) with the bundled model; it runs as part of `tests/test_examples.py`.
+`examples/plot_weimer05_fig08.py` draws the ground magnetic perturbations of 2005b Figure 8 (26 June 2001,
+21:00 UT), computed as the paper does from `epot` and `mpot`: the equivalent current of eq. (10) with α = 1.5,
+carried from AACGM to geographic coordinates, and Biot–Savart from 110 km to the ground (eq. 12), using the
+currents within 8°. The drivers are NOAA OMNI averaged over the 20 min before 21:00 UT, written in the script so
+that it needs no index store. With `cartopy` installed the maps show the continents and borders; without it,
+plain polar axes. It runs as part of `tests/test_examples.py`.
 
 ## In the survey
 
