@@ -1124,15 +1124,28 @@ def _from_store(dts, name, res, avg, lag):
         return np.nanmean(h, axis=1)[inv]
 
 
+# The magnetic-potential series of the model (sum of P * bsphc) -> psi/mu0 [kA]. From mpfac, which turns the same
+# series into J_par [uA/m^2] at 110 km as -1e11/(4 pi) * (its surface Laplacian [1/m^2]), and 2005b eq. (1),
+# J_par = lap(psi)/mu0: psi/mu0 [A] = -1e5/(4 pi) * series. tests/test_weimer05.py checks it against `fac`.
+_W05_MPOT_KA = -100. / (4. * np.pi)
+
+
 def weimer05(time, mlat, mlt, by=None, bz=None, vsw=None, nsw=None, tilt=None, res='5min', avg=20, lag=0):
     '''
     Weimer high-latitude electric potential and field-aligned current: the spherical-cap-harmonic (SCHA)
     revision (Weimer 2005b, JGR 110, A12307) of the models of Weimer (2005a, JGR 110, A05306), in the Fortran
     translation by B. Foster (HAO/NCAR). Returns an xr.Dataset:
-      epot   electric potential [kV]
-      fac    field-aligned current density [uA/m^2] at 110 km, POSITIVE = DOWNWARD (into the ionosphere)
+      epot   electric potential Phi [kV]; the electric field is E = -grad(Phi) (2005a, 2005b eq. 9-10)
+      fac    field-aligned current density [uA/m^2] at 110 km, POSITIVE = DOWNWARD (into the ionosphere):
+             J_par = lap(psi)/mu0, 2005b eq. (1), from the series truncated at degree 10 as the model does
+      mpot   magnetic Euler potential divided by mu0, psi/mu0 [kA] at 110 km: its surface gradient is the
+             curl-free ("potential") horizontal current, J_p = grad(psi)/mu0 [A/m] (2005b eq. 4), the Pedersen
+             current if the conductances have no gradients (eq. 5); with epot it gives the equivalent (Hall)
+             current of 2005b eq. (7) / (10) that drives the ground magnetic perturbations. Zero on the boundary.
     NaN equatorward of the auroral cap (the model's low-latitude boundary, ~24-36 deg colatitude for normal
     conditions) and wherever a driver is missing; plus the drivers used (by, bz, vsw, nsw, tilt) along `time`.
+    NaN equatorward of the boundary is the normal output there and raises no warning; only drivers that put
+    the cap size outside the model's tables (extreme storms) warn (RuntimeWarning, those times NaN).
 
     time         datetime(s).
     mlat, mlt    AACGM (altitude-adjusted corrected geomagnetic) latitude [deg] and magnetic local time [h] of the
@@ -1192,10 +1205,11 @@ def weimer05(time, mlat, mlt, by=None, bz=None, vsw=None, nsw=None, tilt=None, r
     south = np.where(lat_r < 0, -1., 1.)                     # southern hemisphere: mirror, By and tilt change sign
     row = lambda k: np.ascontiguousarray(drv[k][ti], dtype=float)
 
-    epot, fac, ier = _w05.weimer05_batch(row('by') * south, row('bz'), row('tilt') * south, row('vsw'), row('nsw'),
-                                         np.abs(lat_r), mlt_r, _datadir('weimer05'), np.nan)
+    epot, fac, bpot, ier = _w05.weimer05_batch(row('by') * south, row('bz'), row('tilt') * south, row('vsw'),
+                                               row('nsw'), np.abs(lat_r), mlt_r, _datadir('weimer05'), np.nan)
+    mpot = bpot * _W05_MPOT_KA
     if inv is not None:                                                            # back to the caller's mlat order
-        epot, fac = (v.reshape(shape)[:, inv, :].reshape(-1) for v in (epot, fac))
+        epot, fac, mpot = (v.reshape(shape)[:, inv, :].reshape(-1) for v in (epot, fac, mpot))
     if ier == 1:
         raise FileNotFoundError("Weimer05 data files (W05scEpot.dat, W05scBpot.dat, SCHAtable.dat, W05scBndy.dat) "
                                 "not found in %s" % _datadir('weimer05'))
@@ -1204,12 +1218,14 @@ def weimer05(time, mlat, mlt, by=None, bz=None, vsw=None, nsw=None, tilt=None, r
                       "support (extreme storm conditions); those times are NaN", RuntimeWarning)
 
     t64 = np.array(dts, dtype='datetime64[s]')
-    ds = pack({'epot': epot, 'fac': fac}, t64, ['time', 'mlat', 'mlt'], shape,
+    ds = pack({'epot': epot, 'fac': fac, 'mpot': mpot}, t64, ['time', 'mlat', 'mlt'], shape,
               {'time': t64, 'mlat': la, 'mlt': mt})
     ds = ds.assign_coords({k: ('time', v) for k, v in drv.items()})          # the drivers: inputs, as coords
     ds['epot'].attrs.update(units='kV', long_name='electric potential')
     ds['fac'].attrs.update(units='uA/m^2', long_name='field-aligned current density at 110 km',
                            positive='downward (into the ionosphere)')
+    ds['mpot'].attrs.update(units='kA', long_name='magnetic Euler potential / mu0 (psi/mu0) at 110 km',
+                            note='grad(mpot) = potential (curl-free) current [A/m], Weimer (2005b) eq. 4')
     return ds.squeeze()
 
 

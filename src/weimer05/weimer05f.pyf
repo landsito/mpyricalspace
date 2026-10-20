@@ -7,7 +7,7 @@
 
 python module weimer05f ! in
     interface  ! in :weimer05f
-        subroutine weimer05_batch(by,bz,tilt,swvel,swden,mlat,mlt,path,xnan,epot,fac,ier,n) ! in :weimer05f:weimer05_batch.f90
+        subroutine weimer05_batch(by,bz,tilt,swvel,swden,mlat,mlt,path,xnan,epot,fac,bpot,ier,n) ! in :weimer05f:weimer05_batch.f90
             real(kind=8) dimension(n),intent(in) :: by
             real(kind=8) dimension(n),intent(in),depend(by) :: bz
             real(kind=8) dimension(n),intent(in),depend(by) :: tilt
@@ -19,6 +19,7 @@ python module weimer05f ! in
             real(kind=8) intent(in) :: xnan
             real(kind=8) dimension(n),intent(out),depend(by) :: epot
             real(kind=8) dimension(n),intent(out),depend(by) :: fac
+            real(kind=8) dimension(n),intent(out),depend(by) :: bpot
             integer intent(out) :: ier
             integer intent(hide),depend(by) :: n=len(by)
         end subroutine weimer05_batch

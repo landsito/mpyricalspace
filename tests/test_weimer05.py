@@ -1,4 +1,6 @@
 '''Weimer 2005: compiled driver, dipole tilt and the python wrapper (no network, no mongo).'''
+import os
+import warnings
 from datetime import datetime
 import numpy as np
 import pandas as pd
@@ -6,18 +8,61 @@ import pytest
 from mpyricalspace import models
 from mpyricalspace.DataManager import DataManager
 
-# Reference values: the reference implementation's own test run (by=0, bz=-5, tilt=0, 450 km/s, 9 cm^-3), which prints 4 digits.
-# (mlat, mlt, epot [kV], fac [uA/m2])
-REF = [(90.0, 0., -14.35, 0.2876), (84.3344382773, 6., 4.384, -0.2093), (80.4295344893, 12., -14.61, 0.08036),
-       (74.1876988925, 18., -52.95, -0.4077), (69.6681589023, 3., 35.78, 0.4099), (64.7975706790, 9., 1.292, -0.1744)]
 T0 = datetime(2024, 5, 11, 12)
 DRV = dict(by=0., bz=-5., vsw=450., nsw=9., tilt=0.)
+REF_DIR = os.path.join(os.path.dirname(__file__), 'data', 'weimer05')
+
+
+def _read_w05sc(name):
+    'one output file of the original test_w05sc program: (mlt, mlat, values [mlat, mlt]); its fill (1e36) -> NaN'
+    tok = open(os.path.join(REF_DIR, name)).read().split()
+    nlon, nlat = int(tok[0]), int(tok[1])
+    v = np.array(tok[2:], float)
+    mlt, mlat, z = v[:nlon], v[nlon:nlon + nlat], v[nlon + nlat:].reshape(nlat, nlon)
+    return mlt, mlat, np.where(z > 1e35, np.nan, z)
 
 
 def test_matches_original_program():
-    lat, mlt, e, f = map(np.array, zip(*REF))
-    ds = models.weimer05([T0] * len(REF), lat, mlt, **DRV)              # aligned samples
-    assert np.allclose(ds.epot.values, e, rtol=2e-3) and np.allclose(ds.fac.values, f, rtol=2e-3)
+    '''The reference is the 2005b (SCHA) model itself: the output of its original test program, test_w05sc.f90
+       (`make test` in src/weimer05; by=0, bz=-5, tilt=0, 450 km/s, 9 cm^-3, 4 printed digits), on its full
+       97 x 25 grid. Northern hemisphere only: the program does not mirror negative latitudes (the wrapper does,
+       2005a sec. 5, tested below).'''
+    mlt, mlat, e = _read_w05sc('wei05sc_epot_f90.dat')
+    _, _, f = _read_w05sc('wei05sc_fac_f90.dat')
+    north = mlat >= 0
+    ds = models.weimer05(T0, mlat[north], mlt, **DRV)
+    for got, ref, atol in ((ds.epot.values, e[north], 5e-3), (ds.fac.values, f[north], 5e-5)):
+        assert np.array_equal(np.isnan(got), np.isnan(ref))                      # same auroral boundary
+        assert np.isfinite(ref).sum() > 300
+        ok = np.isfinite(ref)
+        assert np.allclose(got[ok], ref[ok], rtol=6e-4, atol=atol)               # to the 4 printed digits
+
+
+def test_mpot_laplacian_is_the_fac():
+    '''2005b eq. (1): J_par = lap(psi)/mu0. The surface Laplacian of mpot (psi/mu0) on the 110 km sphere, by finite
+       differences, must give `fac` with its sign and scale. Not point by point: the model computes fac from the
+       series truncated at degree 10, whereas mpot keeps every degree.'''
+    d = 0.25
+    lat, mlt = np.arange(60., 86.01, d), np.arange(0., 24., d / 15.)       # the same angular step in both
+    ds = models.weimer05(T0, lat, mlt, **DRV)
+    psi, fac = ds.mpot.values * 1e3, ds.fac.values * 1e-6                   # A, A/m^2
+    assert ds.mpot.attrs['units'] == 'kA' and np.isnan(psi[0]).any() and np.isfinite(psi).sum() > 1000
+    r, h, cl = (6371.2 + 110.) * 1e3, np.radians(d), np.cos(np.radians(lat))[:, None]
+    lap = (np.gradient(cl * np.gradient(psi, h, axis=0), h, axis=0) / cl
+           + (np.roll(psi, -1, 1) - 2 * psi + np.roll(psi, 1, 1)) / h ** 2 / cl ** 2) / r ** 2
+    ok = np.isfinite(lap) & (np.abs(fac) > 0.2e-6)
+    ok[:4] = ok[-4:] = False                                                # one-sided differences at the grid edges
+    assert ok.sum() > 1000
+    assert np.corrcoef(lap[ok], fac[ok])[0, 1] > 0.9
+    assert np.median(fac[ok] / lap[ok]) == pytest.approx(1., abs=0.1)
+
+
+def test_nan_equatorward_of_the_boundary_raises_no_warning():
+    'NaN equatorward of the auroral boundary is the normal output there, not something to warn about'
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        ds = models.weimer05(T0, np.arange(-90., 90.1, 2.), np.arange(0., 24., 1.), **DRV)
+    assert np.isnan(ds.epot.values).any() and np.isfinite(ds.epot.values).any()
 
 
 def test_cube_shape_coords_and_attrs():

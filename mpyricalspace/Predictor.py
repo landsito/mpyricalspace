@@ -84,7 +84,8 @@ class Empirical(object):
 
     def run_weimer05(self, mlat, mlt, by=None, bz=None, vsw=None, nsw=None, tilt=None, res='5min', avg=20, lag=0):
         '''
-        Weimer (2005) high-latitude electric potential [kV] and field-aligned current [uA/m^2, + = downward]
+        Weimer (2005) high-latitude electric potential [kV], field-aligned current [uA/m^2, + = downward] and
+        magnetic Euler potential psi/mu0 [kA] (`mpot`)
         at obj.time, on AACGM latitudes `mlat` [deg; negative = southern hemisphere] and magnetic local times
         `mlt` [h] -- see models.weimer05 for the coordinates, the (time, mlat, mlt) cube / aligned-samples rule,
         and NaN handling.

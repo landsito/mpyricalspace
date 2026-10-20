@@ -146,7 +146,8 @@ ds = obj.run_heelis82(mlat, mlt)                   # Heelis convection potential
 Dataset packer live in `mpyricalspace._grid`.
 
 **`run_weimer05(mlat, mlt)`** takes AACGM latitude (negative = southern hemisphere) and magnetic local time and returns
-the electric potential `epot` [kV] and field-aligned current `fac` [µA/m², + downward] as a (time, mlat, mlt) cube,
+the electric potential `epot` [kV], the field-aligned current `fac` [µA/m², + downward] and the magnetic Euler
+potential `mpot` (ψ/μ₀ [kA]; its gradient is the potential current, Weimer 2005b eq. 4) as a (time, mlat, mlt) cube,
 `NaN` equatorward of the auroral boundary and wherever a driver is missing. The drivers (`by`, `bz`, `vsw`, `nsw`,
 `tilt`) are used as given (`run_weimer05(mlat, mlt, by=0., bz=-5., vsw=450., nsw=9.)`); the ones you leave out come from
 the index store (NOAA OMNI) as the **mean of the previous 20 min of the 5-min series** (`res='5min', avg=20`, as in

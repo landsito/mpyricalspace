@@ -2,8 +2,8 @@
 
 Notes on running the Weimer model in mpyricalspace. The short version is in the
 [main README](../../README.md#use);
-this file has the options and limits, and, further down, how the code maps to the papers and how it compares with
-the papers' figures.
+this file has the options and limits, and, further down, how the code maps to the papers and how it is
+validated.
 
 > Weimer, D. R. (2005a), Improved ionospheric electrodynamic models and application to
 > calculating Joule heating rates, J. Geophys. Res., 110, A05306,
@@ -22,7 +22,7 @@ driven by the IMF, the solar wind and the dipole tilt. `Empirical.run_weimer05` 
 **Contents:** [Inputs, coordinates and output](#inputs-coordinates-and-output) ·
 [Driver averaging](#driver-averaging) · [Examples](#examples) · [In the survey](#in-the-survey) ·
 [How the code maps to the papers](#what-the-papers-say-and-where-it-lives-in-the-code) ·
-[Validation](#validation-against-the-papers-figures) · [Build notes](#build-notes) · [Credits and license](#credits-and-license)
+[Validation](#validation) · [Build notes](#build-notes) · [Credits and license](#credits-and-license)
 
 ## Inputs, coordinates and output
 
@@ -38,9 +38,13 @@ driven by the IMF, the solar wind and the dipole tilt. `Empirical.run_weimer05` 
   the magnetic grid: mapping it onto a geographic grid needs a compensation for the non-uniform mapping between the two
   systems (Richmond, 1995, as the papers note).
 - **Output.** `epot` in **kV** and `fac` in **µA/m² at 110 km, positive downward** (into the ionosphere), as in the
-  paper's figures, plus the drivers used along `time`. NaN equatorward of the cap, and wherever a driver is
-  missing. **Southern hemisphere:** pass negative latitudes; they are handled as the paper prescribes (2005a,
-  section 5) — the northern model mirrored, with the signs of By and of the tilt reversed.
+  paper's figures, and `mpot`, the magnetic Euler potential ψ/μ₀ in **kA** (below), plus the drivers used along
+  `time`. NaN equatorward of the cap, and wherever a driver is
+  missing. NaN equatorward of the auroral boundary is the normal output there and raises **no warning**: ask for
+  lower latitudes freely, and let the plot skip the NaN (matplotlib's `contourf` leaves them blank) or fill
+  them yourself (`np.nan_to_num(epot, nan=0.)`, as the potential is zero on the boundary).
+  **Southern hemisphere:** pass negative latitudes; they are handled as the paper prescribes (2005a, section 5) —
+  the northern model mirrored, with the signs of By and of the tilt reversed.
   A cap size outside what the tables support (roughly 8°–66° of colatitude; only extreme storms leave it) gives
   NaN and a `RuntimeWarning` instead of crashing. Normal conditions give a boundary of about 24°–36° colatitude.
 - **Range of validity.** The fits used IMF magnitudes below roughly 15 nT; beyond that the nonlinear saturation
@@ -79,6 +83,7 @@ ds = models.weimer05(datetime(2024, 5, 11, 12), mlat=np.arange(50., 90.1, 1.), m
                      by=0., bz=-5., vsw=450., nsw=9.)
 ds.epot            # kV      (mlat, mlt)
 ds.fac             # uA/m^2  (mlat, mlt), positive = downward, at 110 km
+ds.mpot            # kA      (mlat, mlt), psi/mu0: grad(mpot) is the potential current [A/m] (2005b eq. 4)
 
 # through the facade: drivers from the index store (default: the mean of the previous 20 min of the 5-min series)
 obj = Predictor.Empirical(); obj.set_period(d0, dn, freq=timedelta(minutes=5))
@@ -89,8 +94,8 @@ ds = obj.run_weimer05(mlat, mlt, res='1min', avg=45, lag=10)    # the recipe the
 ds = models.weimer05(times, track_mlat, track_mlt)
 ```
 
-`examples/plot_weimer05_fig02.py` reproduces the paper's Figure 2 (nine polar maps of the potential) and checks the
-extremes against the values printed in it; it runs as part of `tests/test_examples.py`.
+`examples/plot_weimer05_fig02.py` draws the nine polar maps of the electric potential of 2005a Figure 2 (IMF of
+5 nT at nine clock angles) with the bundled model; it runs as part of `tests/test_examples.py`.
 
 ## In the survey
 
@@ -127,7 +132,7 @@ against `setmodel` / `setboundary` and the data files, and match:
 | θ = the IMF clock angle in the **GSM** Y–Z plane, 0° = northward | `angle = atan2(By, Bz)` |
 | potential from SCHA functions Pₙₖ₍ₘ₎ᵐ(cos θ)(g cos mφ + h sin mφ), k ≤ 12, m ≤ 2, degree *n* depending on the cap half-angle θ₀; k−m odd terms only, so the potential is **zero on the boundary** (2005b eq. 11) | `read_data` (`ab`, `ls`, `ms`); `nkmlookup` interpolates *n* in `SCHAtable.dat`; `scplm` caches the basis functions per θ₀ |
 | electric and magnetic potentials share one boundary | one `bndyfitr` for both |
-| J∥ = ∇²ₛψ / μ₀ (eq. 12); the figures plot **downward positive**, at 110 km | `mpfac`: the same series weighted by n(n+1) (the surface-Laplacian eigenvalue), scaled to the 110 km shell — hence `setmodel('bpot')` before `mpfac` |
+| J∥ = ∇²ₛψ / μ₀ (2005b eq. 1); the figures plot **downward positive**, at 110 km | `mpfac`: the same series weighted by n(n+1) (the surface-Laplacian eigenvalue), scaled to the 110 km shell — hence `setmodel('bpot')` before `mpfac` |
 | southern hemisphere: reverse the signs of By and of the tilt (2005a sec. 5) | done in `weimer05()` |
 | models were fitted with the propagated IMF averaged from 55 to 10 min before each pass (45 min; 2005a sec. 2); 2005b drives them every 5 min with the previous 20 min | `avg=45, lag=10` / `res='5min', avg=20` on OMNI (already shifted to the bow shock; the paper says correcting for the bow-shock position is negligible against a 45-min average) |
 | missing plasma data: average values substituted (2005a); the last known density held (2005b) | not automatic — pass `nsw=` |
@@ -136,31 +141,32 @@ Two implementation details that are *not* in the papers: below 1 nT of IMF the c
 dependence (`bt < 1` branches in `setmodel` and `setboundary`), and `weimer05_batch` returns NaN outside the
 tables' cap-size range.
 
+**The magnetic potential, `mpot`.** The model's magnetic Euler potential ψ has no routine of its own in the
+Fortran: `weimer05_batch` sums the same series `mpfac` uses (`bsphc`, every degree; `mpfac` stops at degree 10),
+and `models.weimer05` returns it as ψ/μ₀ in kA, scaled so that 2005b eq. (1), J∥ = ∇²ₛψ/μ₀, gives the model's
+`fac` (`tests/test_weimer05.py` checks it by finite differences). Its surface gradient is the curl-free
+"potential" current, **J_p = ∇ₛψ/μ₀ [A/m]** (2005b eq. 4), which is the Pedersen current Σ_P E if the
+conductances have no gradients (eq. 5). With the electric field E = −∇Φ from `epot` it gives the equivalent
+(Hall) current, **J_e = B̂ × α ∇ₛψ/μ₀** (eq. 7, magnetic potential only) or **J_e ≈ B̂ × α (∇ₛψ/μ₀ · Ê) Ê**
+(eq. 10, both potentials; α = Σ_H/Σ_P = 1.5 in the paper), from which the paper computes the ground ΔB with
+Biot–Savart at 110 km (eq. 12). Like the potential, ψ is zero on the boundary and NaN beyond it.
+
 **Not part of this Fortran, though the papers use them:** the optional AL-index (substorm) component of the
 models; the electric field (−∇ of the potential), Joule heating / Poynting flux (2005a sec. 6), the equivalent
-current and the ground-level ΔB (2005b: Biot–Savart at 110 km, Hall/Pedersen ratio 1.5).
+current and the ground-level ΔB (2005b eq. 7–12: Biot–Savart at 110 km, Hall/Pedersen ratio 1.5) — `epot` and
+`mpot` are the inputs they need.
 Caveats stated in the papers: the FAC has **artifacts near the geomagnetic pole** (second derivatives of the
 highest-degree terms); the models do not capture the response to sudden IMF or dynamic-pressure changes, nor the
 sub-auroral penetration field; and far-out-of-range IMF is extrapolation (above).
 
-## Validation against the paper's figures
+## Validation
 
-2005a Figures 2 and 4 give the potential and FAC extremes for BT = 5 nT at nine clock angles (V = 450 km/s,
-N = 4 cm⁻³, tilt 0), and the total downward current for each. Those figures show the earlier *hybrid* version, so
-they are a benchmark, not an exact target. `examples/plot_weimer05_fig02.py` reproduces Figure 2 and fails if
-any extreme drifts by more than 4 kV from the printed values:
-
-| IMF clock angle | electric potential min / max [kV], paper → here | total downward current [MA], paper → here |
-|---|---|---|
-| 0° (north) | −12 / 12 → −13.1 / 13.0 | 1.4 → 1.16 |
-| 90° | −40 / 29 → −37.1 / 30.2 | 2.3 → 2.26 |
-| 180° (south) | −55 / 47 → −54.7 / 47.5 | 4.1 → 3.73 |
-| 270° | −30 / 28 → −30.9 / 29.2 | 2.2 → 2.21 |
-
-Potentials agree to about 4% (median over all nine cases). The **FAC peak values are lower** than the paper's
-(for 180°: −0.80 / +0.69 µA/m² here against ±1.03) although the *totals* and the sign pattern (region 1
-downward at dawn, upward at dusk) agree; 2005a itself notes that the hybrid model's FAC densities are
-"noticeably higher because of the larger second derivatives", and 2005b that the SCHA maps are smoother.
+**The reference is the 2005b model itself.** The bundled code is the spherical-cap-harmonic version that 2005b
+describes, and `tests/test_weimer05.py` checks it against the output of its original test program
+(`test_w05sc.f90`, `make test` here; by = 0, bz = −5 nT, 450 km/s, 9 cm⁻³, tilt 0) on the program's full 97 × 25
+grid: the same auroral boundary (identical NaN mask) and the same potential and FAC to the 4 digits the program
+prints, at all 373 points inside the cap. The program's output is kept in `tests/data/weimer05/`. The same file
+checks `mpot` against `fac` through 2005b eq. (1).
 
 ## Build notes
 
