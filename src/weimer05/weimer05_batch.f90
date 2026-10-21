@@ -35,7 +35,7 @@ subroutine weimer05_batch(by, bz, tilt, swvel, swden, mlat, mlt, path, xnan, epo
     character(len=4), parameter :: models(2) = [character(len=4) :: 'epot', 'bpot']
     real(kind=8) :: cur(5), now(5)
     logical :: have, ok, exists
-    integer :: i, k
+    integer :: i, k, m
 
     verbose = .false.
     ier = 0
@@ -43,12 +43,20 @@ subroutine weimer05_batch(by, bz, tilt, swvel, swden, mlat, mlt, path, xnan, epo
     fac  = xnan
     bpot = xnan
 
-    ! the model reads file_path//name, so the directory must end in a separator
-    dir = trim(path)
-    if (len(dir) == 0) then
+    ! the model reads file_path//name, so the directory must end in a separator.
+    ! Explicit allocate: with -std=legacy / -fno-automatic (meson.build) an assignment does not
+    ! reallocate dir, so `dir = dir // '/'` dropped the '/' and dir kept the length of a previous call
+    m = len_trim(path)
+    if (allocated(dir)) deallocate(dir)
+    if (m == 0) then
+        allocate(character(len=2) :: dir)
         dir = './'
-    else if (dir(len(dir):len(dir)) /= '/') then
-        dir = dir // '/'
+    else if (path(m:m) == '/') then
+        allocate(character(len=m) :: dir)
+        dir = path(1:m)
+    else
+        allocate(character(len=m+1) :: dir)
+        dir = path(1:m) // '/'
     end if
     do k = 1, size(files)
         inquire(file=dir // trim(files(k)), exist=exists)
