@@ -636,7 +636,7 @@ def msis(time, lat, lon, alt, f107s=None, ap=None, nativelypackaged_indices=Fals
         if nativelypackaged_indices:
             f107s, f107as = nat_f107, nat_f107a
         else:
-            f107s  = manager().get_values(dts, 'f107')
+            f107s  = manager().get_values(dts - timedelta(days=1), 'f107')   # MSIS SFLUX: daily F10.7 of the previous day
             f107as = manager().get_values(dts, 'f107a')
     else:
         f107s  = f107s * np.ones(dts.size)
@@ -656,6 +656,7 @@ def msis(time, lat, lon, alt, f107s=None, ap=None, nativelypackaged_indices=Fals
             row2 = np.nanmean(hist[:, -20:-12], axis=1)
             ap3  = hist[:, -4:]
             aps  = np.concatenate((row2[:, None], row1[:, None], ap3, apdaily[:, None]), axis=1)
+            aps  = aps[:, ::-1]              # pymsis order: daily, 0, -3, -6, -9 h, mean -12..-33 h, mean -36..-57 h
             ap   = ap3[:, -1]
     else:
         try:    aps = np.ones((len(dts), 7)) * ap
