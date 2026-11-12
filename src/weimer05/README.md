@@ -98,7 +98,10 @@ ds = models.weimer05(times, track_mlat, track_mlt)
 21:00 UT), computed as the paper does from `epot` and `mpot`: the equivalent current of eq. (10) with α = 1.5,
 carried from AACGM to geographic coordinates, and Biot–Savart from 110 km to the ground (eq. 12), using the
 currents within 8°. The drivers are NOAA OMNI averaged over the 20 min before 21:00 UT, written in the script so
-that it needs no index store. With `cartopy` installed the maps show the continents and borders; without it,
+that it needs no index store. It is an approximate reproduction: the paper propagated ACE data with its own
+method and used its own geomagnetic-to-geographic mapping, so the values differ somewhat from the published
+figure. As in the paper, the maps are blank equatorward of the model boundary (`MASK_OUTSIDE = True`); set it to
+`False` to draw the perturbation at lower latitudes, where it can in principle also be computed. With `cartopy` installed the maps show the continents and borders; without it,
 plain polar axes. It runs as part of `tests/test_examples.py`.
 
 ## In the survey

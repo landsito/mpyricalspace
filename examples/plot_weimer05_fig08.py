@@ -25,7 +25,14 @@ ground perturbation is not part of it. This script follows the paper:
 Drivers: the paper propagates ACE data to the magnetosphere with its own minimum-variance technique; here they
 are NOAA OMNI (already shifted to the bow shock), averaged over the 20 min before 21:00 UT (the 5-min samples
 of 20:45-21:00) the way 2005b drives the model. They are written below so that the script needs no index store.
-The maps show the same quantities, at the same time and in the same layout as the paper's figure.
+The maps show the same quantities, at the same time and in the same layout as the paper's figure. This is an
+approximate reproduction: the paper's own ACE propagation and coordinate mapping are not reproduced, so differences
+from the published values are expected.
+
+The paper's figure shows nothing equatorward of the model boundary (D. Weimer, pers. comm.: his graphics routines
+took everything below the boundary as zero), although the ground perturbation can in principle be computed there.
+MASK_OUTSIDE = True (the default) follows the paper and leaves those points blank; set it to False to draw the
+perturbation at lower latitudes too.
 
     pip install "mpyricalspace[examples]"          # for matplotlib
     python examples/plot_weimer05_fig08.py
@@ -47,6 +54,7 @@ ALPHA = 1.5                                         # Hall / Pedersen conductanc
 ARC_DEG = 8.0                                       # Biot-Savart only within this arc of the point overhead
 RE, H = 6371.2e3, 110e3                             # m; the current sheet is at 110 km
 MU0 = 4e-7 * np.pi
+MASK_OUTSIDE = True                                 # blank the maps equatorward of the model boundary, as the paper
 
 STATIONS = {"THL": (77.5, 290.8), "GDH": (69.2, 306.5), "NAQ": (61.2, 314.6), "FCC": (58.8, 265.9),
             "YKC": (62.5, 245.5), "BRW": (71.3, 203.4)}               # Table 1 of the paper (geographic)
@@ -148,6 +156,12 @@ db = delta_b(GLA, GLO)
 # the model boundary (the lowest latitude inside the cap, for each magnetic longitude), in geographic
 first = np.argmax(inside, axis=0)
 blat, blon = a2g(mlat[first] - D_DEG / 2, mlon)
+if MASK_OUTSIDE:
+    # a ground point is inside when the point overhead (110 km) lies poleward of the boundary in AACGM
+    pla, plo, _ = aacgmv2.convert_latlon_arr(GLA.ravel(), GLO.ravel(), H / 1e3, T, method_code="G2A")
+    edge = np.interp(np.mod(plo, 360.0), np.r_[mlon - 360.0, mlon, mlon + 360.0], np.tile(mlat[first] - D_DEG / 2, 3))
+    outside = ~(np.isfinite(pla) & (pla >= edge)).reshape(GLA.shape)
+    db[outside] = np.nan
 
 # ------------------------------------------------------------------ plot: polar maps, as oriented in the paper
 # The paper's maps: an orthographic view of the north pole with the 225 deg E meridian at the top (NAQ to the left,
@@ -168,7 +182,10 @@ def map_axes(fig, pos):
     "one polar map; returns the axes and a function (lon, lat) -> the keyword arguments to plot there"
     if ccrs is not None:
         ax = fig.add_subplot(pos, projection=ccrs.Orthographic(central_longitude=TOP_LON - 180.0, central_latitude=90))
-        ax.set_extent([-180, 180, 40, 90], ccrs.PlateCarree())
+        r40 = ax.projection.globe.semimajor_axis or 6378137.0
+        r40 *= np.cos(np.radians(40.0))                               # the 40 deg parallel, in projected metres
+        ax.set_xlim(-r40, r40)                                        # (set_extent does not centre a polar view)
+        ax.set_ylim(-r40, r40)
         theta = np.linspace(0, 2 * np.pi, 200)
         ax.set_boundary(plt.matplotlib.path.Path(np.c_[np.sin(theta), np.cos(theta)] * 0.5 + 0.5), transform=ax.transAxes)
         ax.add_feature(cfeature.LAND.with_scale("110m"), facecolor="0.85", zorder=0)
@@ -204,7 +221,7 @@ for pos, (name, k, step_nt, top) in zip((211, 212), [("N-S", 0, 35, 280), ("E-W"
         x, y, kw = at(slo, sla)
         ax.plot(x, y, "kx", ms=6, zorder=5, **kw)
         ax.text(x, y, "  " + code, fontsize=7, va="bottom", zorder=5, **kw)
-    lo_, hi_ = float(z.min()), float(z.max())
+    lo_, hi_ = float(np.nanmin(z)), float(np.nanmax(z))
     ax.annotate("%.0f nT" % lo_, (0.0, -0.04), xycoords="axes fraction", ha="left", fontsize=9)
     ax.annotate("%.0f nT" % hi_, (1.0, -0.04), xycoords="axes fraction", ha="right", fontsize=9)
     fig.colorbar(cf, ax=ax, label="%s $\\Delta$B [nT]" % name, shrink=0.8)
